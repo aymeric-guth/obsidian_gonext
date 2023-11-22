@@ -72,11 +72,6 @@ export const Helper = {
 	},
 
 	getTag(fm, type, emptyDefault) {
-		if (fm === undefined) {
-			throw new Error(`"fm" parameter is required`);
-		}
-
-		const tags = fm.tags;
 		let name = "";
 		let defaultValue = "";
 
@@ -96,7 +91,7 @@ export const Helper = {
 			name = Namespace.Project;
 			defaultValue = Default.Project;
 		} else {
-			throw new Error(`getTag got unsuported type: ${type}`);
+			throw new Error(`getTag got unsuported type: '${type}'`);
 		}
 
 		const len = name.length + 1;
@@ -107,6 +102,11 @@ export const Helper = {
 			defaultRetVal = undefined;
 		}
 
+		if (fm === undefined) {
+			return defaultRetVal;
+		}
+
+		const tags = fm.tags;
 		if (tags === undefined || tags.length === 0) {
 			return defaultRetVal;
 		}
@@ -249,9 +249,6 @@ export const Renderer = {
 			const now = new Date();
 			const delta = now.getTime() - dt.getTime();
 			const since = Helper.msecToStringDuration(delta);
-			console.log(
-				`basicFleeting: fm.tags ${fm.tags} fm.project: ${fm.project} fm.area: ${fm.area}`,
-			);
 			buff.push([Renderer.makeLinkAlias(dv, f), `${since}`, f.size]);
 		}
 
@@ -450,15 +447,8 @@ export class Frontmatter {
 	}
 
 	parseListBeforeAfter(fm) {
-		console.log(`parseListBeforeAfter: fm.before: ${fm.before}`);
-		console.log(`parseListBeforeAfter: fm.after: ${fm.after}`);
-
 		const before = Helper.getDate(fm.before);
 		const after = Helper.getDate(fm.after);
-
-		console.log(`parseListBeforeAfter: before: ${before}`);
-		console.log(`parseListBeforeAfter: after: ${after}`);
-
 		return [before, after];
 	}
 
@@ -568,7 +558,6 @@ export class NoteHelper {
 	hasPendingDependencies(deps) {
 		for (const dep of deps) {
 			const task = this.dv.pages(`"${Paths.Tasks}/${dep}"`).array();
-			// console.log(`task: '${task}' typeof task: '${typeof task}' task.length: '${task.length}'`);
 			if (task.length === 0) {
 				console.warn(
 					`hasPendingDependencies: "${Paths.Tasks}/${dep}" task does not exists`,
@@ -591,6 +580,38 @@ export class NoteHelper {
 		}
 
 		return false;
+	}
+
+	isChildTag(parent, child) {
+		if (child.length <= parent.length + 1) {
+			return false;
+		} else if (child.slice(0, parent.length + 1) != `${parent}/`) {
+			return false;
+		}
+		return true;
+	}
+
+	getNamespaceContent(ns: string) {
+		const children = [];
+		const pages = this.dv.pages(`#${ns}`);
+		for (const p of pages) {
+			const tags = p.file.frontmatter.tags;
+
+			if (tags === undefined || tags.length === 0) {
+				continue;
+			}
+
+			for (const tag of tags) {
+				if (this.isChildTag(ns, tag)) {
+					const t = tag.slice(ns.length + 1);
+					if (!children.contains(t)) {
+						children.push(t);
+					}
+				}
+			}
+		}
+
+		return children;
 	}
 }
 
@@ -834,7 +855,114 @@ export class ListMaker {
 	allTodoProjects() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, minPriority] =
 			this.frontmatter.parseTodoList();
-		const today = dv.pages(`"Journal"`)[0].file.frontmatter.tasks;
+		const fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+
+		// undefined | null, empty arr, arr 1+ valeurs str
+		const filterBy = fml.filter_by;
+
+		// undefined, null || string || empty arr || arr.len 1+[str]
+		let groupBy = fml.group_by;
+		if (typeof groupBy === "undefined" || groupBy === "") {
+			groupBy = "";
+		} else if (typeof groupBy === "string") {
+		} else {
+			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
+		}
+
+		const today = this.dv.pages(`"${Paths.Journal}"`)[0].file.frontmatter
+			.tasks;
+		const projects = this.noteHelper.getNamespaceContent(Namespace.Project);
+		projects.sort();
+		const rs = [];
+		rs.push(["header", 1, "Projects"]);
+
+		for (const project of projects) {
+			const bins = [];
+			if (project === "none") {
+				continue;
+			}
+
+			const tasks = this.dv
+				.pages(`#${Namespace.Project}/${project}`)
+				.where(
+					(page) =>
+						page.type === Types.Task && page.status === Status.Todo,
+				);
+			let elCount = 0;
+
+			for (const task of tasks) {
+				const fm = task.file.frontmatter;
+				if (
+					filterBy !== undefined &&
+					filterBy !== null &&
+					filterBy.length > 0
+				) {
+					if (!this.nameInNamespace(fm, filterBy)) {
+						continue;
+					}
+				}
+
+				if (today.contains(fm.uuid)) {
+					continue;
+				}
+
+				if (fm.priority !== undefined && fm.priority < minPriority) {
+					continue;
+				}
+
+				if (this.noteHelper.isDoable(task)) {
+					let by = groupBy;
+					if (groupBy !== "") {
+						by = Helper.getTag(task.file.frontmatter, groupBy, true);
+						if (by === undefined) {
+							by = "";
+						}
+					}
+					
+					if (bins[by] === undefined) {
+						bins[by] = [task];
+					} else {
+						bins[by].push(task);
+					}
+					elCount++;
+				}
+			}
+
+			if (elCount === 0) {
+				continue;
+			}
+
+			rs.push(["header", 2, project]);
+			if (groupBy === "") {
+				bins[""].sort(
+					(a, b) =>
+						a.file.frontmatter.priority -
+						b.file.frontmatter.priority,
+				);
+				rs.push(["array", Renderer.readyTask, bins[""]]);
+			} else {
+				const keys = Object.keys(bins);
+				keys.sort();
+				for (const key of keys) {
+					// add a header if key != for default value
+					if (key !== Helper.getTag({tags: []}, groupBy)) {
+						rs.push(["header", 3, key]);
+					}
+
+					bins[key].sort(
+						(a, b) =>
+							a.file.frontmatter.priority -
+								b.file.frontmatter.priority,
+					);
+					rs.push(["array", Renderer.readyTask, bins[key]]);
+				}
+			}
+		}
+
+		return rs;
 	}
 
 	allDoneTaskWithoutLog() {
@@ -1262,11 +1390,9 @@ export class ListMaker {
 
 			// task
 			// createdAt, doneAt, uuid, estimate, took, area, project, logEntries
-			console.log(`arr: ${arr}`);
 			// JSON.parse(JSON.stringify(buff))
 			rs.push(["array", Renderer.basicDoneTaskWithLogs, arr]);
 			totalTime = Math.round((totalTime / 3600) * 10) / 10;
-			console.log(`totalTime: ${totalTime}`);
 			rs.push(["stats", "totalTime", "h", totalTime]);
 		}
 
@@ -1274,12 +1400,25 @@ export class ListMaker {
 	}
 
 	inbox() {
-		const [source, groupBy, minSize, maxSize] =
-			this.frontmatter.parseInbox();
+		let [source, groupBy, minSize, maxSize] = this.frontmatter.parseInbox();
 		const rs = [];
 		const buff = [];
 		const bins = {};
+		// fonction d'extraction et d'initialisation des paramrtres du frontmatter
+		// fonction filter, (task) -> bool
 
+		const fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+
+		groupBy = fml.group_by;
+		if (
+			!(typeof groupBy === "undefined") &&
+			!(typeof groupBy === "string")
+		) {
+			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
+		}
 		rs.push(["header", 1, "Inbox"]);
 
 		if (source.contains("fleeting")) {
@@ -1352,6 +1491,24 @@ export class ListMaker {
 			}
 		}
 
+		const sortBySizeThenDate = function (a, b) {
+			const fA = a.file;
+			const fB = b.file;
+			if (fA.size !== fB.size) {
+				return fB.size - fA.size;
+			} else {
+				return (
+					fA.frontmatter.createdAt.getTime() -
+					fB.frontmatter.createdAt.getTime()
+				);
+			}
+		};
+		const sortByAge = (a, b) =>
+			a.file.frontmatter.createdAt.getTime() -
+			b.file.frontmatter.createdAt.getTime();
+
+		const sortBy = sortByAge;
+
 		if (groupBy == "area") {
 			for (const e of buff) {
 				const area = e.file.frontmatter.area;
@@ -1364,18 +1521,7 @@ export class ListMaker {
 			const keys = Object.keys(bins);
 			keys.sort();
 			for (const area of keys) {
-				bins[area].sort((a, b) => {
-					const fA = a.file;
-					const fB = b.file;
-					if (fA.size !== fB.size) {
-						return fB.size - fA.size;
-					} else {
-						return (
-							fA.frontmatter.createdAt.getTime() -
-							fB.frontmatter.createdAt.getTime()
-						);
-					}
-				});
+				bins[area].sort(sortBy);
 			}
 			for (const area of keys) {
 				rs.push([
@@ -1398,18 +1544,7 @@ export class ListMaker {
 			keys.sort();
 
 			for (const project of keys) {
-				bins[project].sort((a, b) => {
-					const fA = a.file;
-					const fB = b.file;
-					if (fA.size !== fB.size) {
-						return fB.size - fA.size;
-					} else {
-						return (
-							fA.frontmatter.createdAt.getTime() -
-							fB.frontmatter.createdAt.getTime()
-						);
-					}
-				});
+				bins[project].sort(sortBy);
 			}
 
 			for (const project of keys) {
@@ -1421,19 +1556,7 @@ export class ListMaker {
 				rs.push(["array", Renderer.inboxEntry, bins[project]]);
 			}
 		} else {
-			buff.sort((a, b) => {
-				const fA = a.file;
-				const fB = b.file;
-
-				if (fA.size !== fB.size) {
-					return fB.size - fA.size;
-				} else {
-					return (
-						fA.frontmatter.createdAt.getTime() -
-						fB.frontmatter.createdAt.getTime()
-					);
-				}
-			});
+			buff.sort(sortBy);
 			rs.push(["array", Renderer.inboxEntry, buff]);
 		}
 
@@ -1565,7 +1688,6 @@ export class ListMaker {
 					arr.push(["header", 3, k]);
 					arr.push(["array", Renderer.basicTask, res[k]]);
 				}
-
 			} else {
 				bins.doable.sort(
 					(a, b) =>
@@ -1600,28 +1722,5 @@ export class ListMaker {
 		}
 
 		return arr;
-	}
-
-	getNamespaceContent(dv, ns) {
-		const children = [];
-		const resp = this.dv.pages(`#${ns}`);
-		for (const f of resp) {
-			const tags = f.tags;
-			if (tags === undefined) {
-				continue;
-			}
-
-			for (const tag of tags) {
-				console.log(`tag: ${tag}`);
-				if (Helper.isChildTag(ns, tag)) {
-					const t = tag.slice(ns.length + 1);
-					if (!children.includes(t)) {
-						children.push(t);
-					}
-				}
-			}
-		}
-
-		return children;
 	}
 }
