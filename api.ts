@@ -153,6 +153,8 @@ export const Helper = {
 			m = 60;
 		} else if (mult === "d") {
 			m = 24 * 60 * 60;
+		} else if (mult == "w") {
+			m = 24 * 60 * 60 * 7;
 		} else {
 			console.warn(`Unhandled case val: ${val}`);
 			return undefined;
@@ -450,6 +452,56 @@ export class Frontmatter {
 		const before = Helper.getDate(fm.before);
 		const after = Helper.getDate(fm.after);
 		return [before, after];
+	}
+
+	parseListFilterBy(fm) {
+		if (fm === undefined) {
+			return [];
+		}
+
+		const filterBy = fm.filter_by;
+		if (!Array.isArray(filterBy)) {
+			return [];
+		}
+
+		return filterBy;
+	}
+
+	parseListGroupBy(fm) {
+		if (fm === undefined) {
+			return "";
+		}
+
+		const groupBy = fm.group_by;
+		if (
+			!(typeof groupBy === "undefined") &&
+			!(typeof groupBy === "string")
+		) {
+			return "";
+		}
+
+		return groupBy;
+	}
+
+	parseAllProgressedTasks() {
+		const fm = this.getCurrentFrontmatter();
+		if (fm === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+
+		const groupBy = this.parseListGroupBy(fm);
+		const filterBy = this.parseListFilterBy(fm);
+		const [before, after] = this.parseListBeforeAfter(fm);
+
+		return [groupBy, filterBy, before, after];
+	}
+
+	parseAllDoneTasks() {
+		return this.parseAllProgressedTasks();
+	}
+
+	parseAllDoneTaskWithoutLog() {
+		return this.parseAllProgressedTasks();
 	}
 
 	parseInbox() {
@@ -916,12 +968,16 @@ export class ListMaker {
 				if (this.noteHelper.isDoable(task)) {
 					let by = groupBy;
 					if (groupBy !== "") {
-						by = Helper.getTag(task.file.frontmatter, groupBy, true);
+						by = Helper.getTag(
+							task.file.frontmatter,
+							groupBy,
+							true,
+						);
 						if (by === undefined) {
 							by = "";
 						}
 					}
-					
+
 					if (bins[by] === undefined) {
 						bins[by] = [task];
 					} else {
@@ -948,14 +1004,14 @@ export class ListMaker {
 				keys.sort();
 				for (const key of keys) {
 					// add a header if key != for default value
-					if (key !== Helper.getTag({tags: []}, groupBy)) {
+					if (key !== Helper.getTag({ tags: [] }, groupBy)) {
 						rs.push(["header", 3, key]);
 					}
 
 					bins[key].sort(
 						(a, b) =>
 							a.file.frontmatter.priority -
-								b.file.frontmatter.priority,
+							b.file.frontmatter.priority,
 					);
 					rs.push(["array", Renderer.readyTask, bins[key]]);
 				}
@@ -1082,41 +1138,21 @@ export class ListMaker {
 	}
 
 	allProgressedTasks() {
-		const [
-			byAreas,
-			byContexts,
-			byLayers,
-			byOrgs,
-			byProjects,
-			fields,
-			stats,
-			before,
-			after,
-		] = this.frontmatter.parseDoneList();
-
+		const [groupBy, filterBy, before, after] = this.frontmatter.parseAllProgressedTasks();
 		const tasks = this.dv
 			.pages(`"${Paths.Tasks}"`)
 			.where(
-				(t) =>
-					(t.status === Status.Todo ||
-						t.status === Status.Maybe ||
-						t.status === Status.Standby) &&
-					t.type === 3,
+				(page) =>
+					(page.status === Status.Todo ||
+						page.status === Status.Maybe ||
+						page.status === Status.Standby) &&
+					page.type === 3,
 			);
 
 		const buff = [];
 		for (const task of tasks) {
 			const fm = task.file.frontmatter;
-			if (
-				!this.filterByNamespace(
-					fm,
-					byAreas,
-					byContexts,
-					byLayers,
-					byOrgs,
-					byProjects,
-				)
-			) {
+			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
 				continue;
 			}
 
@@ -1131,6 +1167,7 @@ export class ListMaker {
 
 			const logs = this.dv
 				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((page) => page.type === Types.Log)
 				.sort((k) => k.created_at, "asc");
 
 			// discard tasks without log entry
@@ -1140,10 +1177,7 @@ export class ListMaker {
 
 			fm.took = 0;
 			const project = Helper.getField(Helper.getProject(fm, true), "");
-			let area = Helper.getArea(fm, true);
-			if (area === undefined) {
-				area = "";
-			}
+			const area = Helper.getField(Helper.getArea(fm, true), "");
 
 			for (const log of logs) {
 				const fml = log.file.frontmatter;
@@ -1158,12 +1192,14 @@ export class ListMaker {
 					logPath: log.file.path,
 				};
 				if (fml.created_at === undefined) {
+					console.log(log);
 					throw new Error(
 						`task: ${fm.uuid} last entry is missing 'created_at' field`,
 					);
 				}
 
 				if (fml.done_at === undefined) {
+					console.log(log);
 					throw new Error(
 						`task: ${fm.uuid} last entry is missing 'done_at' field`,
 					);
@@ -1252,18 +1288,7 @@ export class ListMaker {
 	}
 
 	allDoneTasks() {
-		const [
-			byAreas,
-			byContexts,
-			byLayers,
-			byOrgs,
-			byProjects,
-			fields,
-			stats,
-			before,
-			after,
-		] = this.frontmatter.parseDoneList();
-
+		const [groupBy, filterBy, before, after] = this.frontmatter.parseAllDoneTasks();
 		const tasks = this.dv
 			.pages(`"${Paths.Tasks}"`)
 			.where((p) => p.status === Status.Done);
@@ -1271,16 +1296,7 @@ export class ListMaker {
 		const buff = [];
 		for (const task of tasks) {
 			const fm = task.file.frontmatter;
-			if (
-				!this.filterByNamespace(
-					fm,
-					byAreas,
-					byContexts,
-					byLayers,
-					byOrgs,
-					byProjects,
-				)
-			) {
+			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
 				continue;
 			}
 
@@ -1327,6 +1343,11 @@ export class ListMaker {
 			fm.doneAt = new Date(lastEntry.file.frontmatter.created_at);
 			fm.createdAt = new Date(lastEntry.file.frontmatter.done_at);
 			fm.timeEstimate = Helper.durationStringToSec(fm.time_estimate);
+			
+			if (!this.filterByDate(fm.doneAt, before, after)) {
+				continue;
+			}
+
 			buff.push(task);
 		}
 
@@ -1346,8 +1367,7 @@ export class ListMaker {
 
 		const rs = [];
 		for (const key of keys.reverse()) {
-			rs.push(["header", 3, key]);
-			// this.dv.header(3, key);
+			rs.push(["header",2, key]);
 			const arr = [];
 			let totalTime = 0;
 
