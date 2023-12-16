@@ -1,5 +1,12 @@
 import { Plugin, Workspace, HTMLElement, MarkdownView } from "obsidian";
-import { Helper, Frontmatter, ListMaker, Namespace, Renderer } from "./api";
+import {
+	Helper,
+	Frontmatter,
+	ListMaker,
+	Namespace,
+	Renderer,
+	AutoField,
+} from "./api";
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
 // Remember to rename these classes and interfaces!
@@ -12,11 +19,10 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 };
 
 // représente la vue actuelle, l'onglet actif, le focus
-// contient une ref au frontmatter qui est preprocess, 
+// contient une ref au frontmatter qui est preprocess,
 // ie champs fm.project, fm.area, ... sont populés
 class Current {
-	constructor() {
-	}
+	constructor() {}
 }
 
 export default class MyPlugin extends Plugin {
@@ -67,17 +73,20 @@ export default class MyPlugin extends Plugin {
 		this.api = {
 			getArea: Helper.getArea,
 			getContext: Helper.getContext,
+			getDomain: Helper.getDomain,
 			getLayer: Helper.getLayer,
 			getOrg: Helper.getOrg,
 			getProject: Helper.getProject,
 			durationStringToSec: Helper.durationStringToSec,
 			paths: Paths,
 			types: Types,
+			status: Status,
 			namespace: Namespace,
 			default: Default,
 			frontmatter: this.frontmatter,
 			listMaker: this.listMaker,
 			renderer: Renderer,
+			autoField: AutoField,
 		};
 
 		window.gonext = {
@@ -145,6 +154,86 @@ export default class MyPlugin extends Plugin {
 				// console.log("editor callback function");
 				// console.log(editor.getSelection());
 				// editor.replaceSelection('Sample Editor Command');
+			},
+		});
+		this.addCommand({
+			id: "safe-delete",
+			name: "Safe Delete",
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				const file = app.workspace.getActiveFile();
+				const fm = app.metadataCache.getFileCache(file).frontmatter;
+				if (fm === undefined) {
+					return;
+				}
+
+				const rootPath = [
+					`${Paths.Journal}.md`,
+					`${Paths.Inbox}.md`,
+					"Ad Hoc.md",
+					"allDoneTasks.md",
+					"allDoneTasksWithoutLog.md",
+					"allMedia.md",
+					"allProgressedTasks.md",
+					"noteLocator.md",
+					"Praxis.md",
+				];
+				for (const p of rootPath) {
+					if (file.path === p) {
+						return;
+					}
+				}
+
+				if (
+					file.path.split(0, Paths.Resources.length) ===
+					Paths.Resources
+				) {
+					return;
+				}
+
+				console.log(`deleted file: ${file.path}`);
+				app.vault.delete(file);
+			},
+		});
+
+		this.addCommand({
+			id: "go-parent",
+			name: "Go Parent",
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				const file = app.workspace.getActiveFile();
+				const fm = app.metadataCache.getFileCache(file).frontmatter;
+				if (fm === undefined) {
+					return;
+				}
+
+				if (fm.parent_id === undefined && fm.ref_id === undefined) {
+					console.warn(
+						`parent_id: '${fm.parent_id}' ref_id: '${fm.ref_id}'`,
+					);
+					return;
+				}
+
+				if (
+					fm.type === undefined ||
+					(fm.type !== Types.Log &&
+						fm.type !== Types.Media &&
+						fm.type !== Types.Fleeting)
+				) {
+					console.warn(
+						`invalid type: '${fm.type}' for note: '${fm.uuid}'`,
+					);
+					return;
+				}
+
+				// https://docs.obsidian.md/Reference/TypeScript+API/Workspace/createLeafInParent
+				// app.workspace.createLeafInParent();
+				// const leaf = app.workspace.getLeaf(true);
+				// parent id
+				const parent =
+					fm.type === Types.Log
+						? `${Paths.Tasks}/${fm.parent_id}.md`
+						: `${Paths.Refs}/${fm.ref_id}.md`;
+				const page = app.vault.getAbstractFileByPath(parent);
+				app.workspace.openLinkText(parent, "/", false);
 			},
 		});
 	}

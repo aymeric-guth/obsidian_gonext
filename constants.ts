@@ -7,6 +7,8 @@ export const Paths = {
 	Logs: "600 Log",
 	Attachments: "000 Attachments",
 	Journal: "Journal",
+	Resources: "Resources",
+	Projects: "100 Projects",
 };
 
 export const Status = {
@@ -26,6 +28,8 @@ export const Types = {
 	Praxis: 4,
 	Provision: 5,
 	Log: 6,
+	Resource: 7,
+	Media: 8,
 };
 
 export const Namespace = {

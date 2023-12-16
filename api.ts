@@ -20,6 +20,44 @@ export const Helper = {
 		return val === undefined || val === null;
 	},
 
+	getKeyFuck(groupBy) {
+		switch (groupBy) {
+			default:
+			case "doneAt":
+				return (entry) =>
+					entry.file.frontmatter.doneAt.toISOString().slice(0, 10);
+				break;
+			case "createdAt":
+				return (entry) =>
+					entry.file.frontmatter.createdAt.toISOString().slice(0, 10);
+				break;
+			case "project":
+				return (entry) => entry.file.frontmatter.project;
+				break;
+			case "area":
+				return (entry) => entry.file.frontmatter.area;
+				break;
+		}
+	},
+
+	getKey(groupBy) {
+		switch (groupBy) {
+			default:
+			case "doneAt":
+				return (entry) => entry.doneAt.toISOString().slice(0, 10);
+				break;
+			case "createdAt":
+				return (entry) => entry.createdAt.toISOString().slice(0, 10);
+				break;
+			case "project":
+				return (entry) => entry.project;
+				break;
+			case "area":
+				return (entry) => entry.area;
+				break;
+		}
+	},
+
 	numberTypeToString(val: number): string {
 		switch (val) {
 			case Types.Fleeting:
@@ -90,6 +128,9 @@ export const Helper = {
 		} else if (type === "project") {
 			name = Namespace.Project;
 			defaultValue = Default.Project;
+		} else if (type == "domain") {
+			name = "domain";
+			defaultValue = "none";
 		} else {
 			throw new Error(`getTag got unsuported type: '${type}'`);
 		}
@@ -132,6 +173,11 @@ export const Helper = {
 	getContext(fm, emptyDefault = false) {
 		return Helper.getTag(fm, "context", emptyDefault);
 	},
+
+	getDomain(fm, emptyDefault = false) {
+		return Helper.getTag(fm, "domain", emptyDefault);
+	},
+
 	getLayer(fm, emptyDefault = false) {
 		return Helper.getTag(fm, "layer", emptyDefault);
 	},
@@ -184,6 +230,114 @@ export const Helper = {
 	},
 };
 
+export const AutoField = {
+	tags(dv, fm) {
+		const tags = fm.tags;
+		if (tags == undefined || tags.length === 0) {
+			return;
+		}
+
+		tags.sort();
+		dv.header(3, "Tags");
+		let s = "";
+		for (const tag of tags) {
+			s += ` #${tag}`;
+		}
+		dv.paragraph(s);
+	},
+
+	authors(dv, fm) {
+		const authors = fm.authors;
+		if (authors === undefined || authors.length === 0) {
+			return;
+		}
+
+		dv.header(3, "Authors");
+		dv.list(authors);
+	},
+
+	title(dv, fm) {
+		const title = fm.alias;
+		if (title === undefined || title.length === 0) {
+			return;
+		}
+
+		dv.header(3, title);
+	},
+
+	logs(dv, entries) {
+		const buff = [];
+		let totalTime = 0;
+
+		for (const entry of entries) {
+			const fme = entry.file.frontmatter;
+			const e = [];
+			let start = 0;
+			let stop = 0;
+			if (fme === undefined || fme.created_at === undefined) {
+				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+			}
+
+			start = new Date(fme.created_at);
+			e.push(start.toISOString().slice(0, 10));
+			if (fme.done_at === undefined) {
+				stop = Date.now();
+			} else {
+				stop = new Date(fme.done_at);
+			}
+			totalTime += stop - start;
+			e.push(
+				dv.sectionLink(
+					fme.uuid,
+					"## Content",
+					false,
+					fme.uuid.slice(0, 8),
+				),
+			);
+			e.push(Math.round(((stop - start) / (1000 * 60 * 60)) * 10) / 10);
+			if (fme.reviewed === undefined || fme.reviewed === 0) {
+				e.push(0);
+			} else {
+				e.push(fme.reviewed);
+			}
+			buff.push(e);
+		}
+
+		if (buff.length > 0) {
+			dv.header(2, "Logs");
+			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
+			if (totalTime > 0) {
+				dv.paragraph(
+					`_totalTime (h):_ ${
+						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					}`,
+				);
+			}
+		}
+	},
+
+	media(dv) {
+		const current = dv.current();
+		const fm = current.file.frontmatter;
+		const pages = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+		if (pages.length !== 1) {
+			return;
+		}
+		const media = pages[0];
+		const mediaFm = media.file.frontmatter;
+		AutoField.title(dv, mediaFm);
+		dv.paragraph(Renderer.makeLinkAlias(dv, media.file));
+		AutoField.authors(dv, mediaFm);
+		AutoField.tags(dv, mediaFm);
+
+		const logEntries = dv
+			.pages(`"${Paths.Logs}/${fm.uuid}"`)
+			.where((p) => p.type === 6)
+			.sort((k) => k.created_at, "desc");
+		AutoField.logs(dv, logEntries);
+	},
+};
+
 // this must be called from `dataviewjs` codeblocks
 export const Renderer = {
 	makeLinkAlias(dv, f, anchor = "Content") {
@@ -231,6 +385,64 @@ export const Renderer = {
 				// Helper.getProject(fm, true),
 				// Helper.getArea(fm, true),
 			]);
+		}
+
+		dv.table(cols, buff);
+	},
+
+	adhocTaskReady(dv, data) {
+		const buff = [];
+		const cols = ["uuid", "task", "estimate"];
+
+		for (const d of data) {
+			// at this point all data validation has been done
+			// types are assumed consistent
+			const f = d.file;
+			const fm = f.frontmatter;
+
+			switch (fm.type) {
+				case Types.Task:
+					buff.push([
+						Renderer.makeLinkAlias(dv, f, "Task"),
+						dv.markdownTaskList(f.tasks),
+						fm.time_estimate,
+						Helper.getField(Helper.getDomain(fm, true), "\\-"),
+					]);
+					break;
+
+				case Types.Media:
+					const pages = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+					if (pages.length !== 1) {
+						throw new Error(`adhocTaskReady: ref_id: "${fm.ref_id}" not found`);
+					}
+
+					buff.push([
+						Renderer.makeLinkAlias(dv, f, "Content"),
+						Renderer.makeLinkAlias(dv, pages[0].file, "Content"),
+						fm.time_estimate,
+						Helper.getField(Helper.getDomain(fm, true), "\\-"),
+					]);
+					break;
+
+				default:
+					throw new Error(`adhocTaskReady: Unhandled type: '${fm.type}'`);
+			}
+		}
+
+		dv.table(cols, buff);
+	},
+
+	resourceBase(dv, data) {
+		const cols = ["uuid"];
+		const buff = [];
+		for (const d of data) {
+			const f = d.file;
+			const fm = d.file.frontmatter;
+			Assert.True(
+				!Helper.nilCheck(fm.uuid),
+				`"uuid" id not defined for: ${f.path}`,
+			);
+			buff.push([Renderer.makeLinkAlias(dv, f)]);
 		}
 
 		dv.table(cols, buff);
@@ -301,6 +513,40 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
+	mediaBase(dv, data) {
+		const buff = [];
+		const cols = ["uuid", "tasks", "estimate", "area"];
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			const area = Helper.getArea(fm);
+			buff.push([
+				dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+				dv.markdownTaskList(f.tasks),
+				fm.time_estimate,
+				area,
+			]);
+		}
+
+		dv.table(cols, buff);
+	},
+
+	praxisBase(dv, data) {
+		const buff = [];
+		const cols = ["tasks", "uuid", "estimate"];
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			buff.push([
+				dv.markdownTaskList(f.tasks),
+				dv.fileLink(f.path, false, f.name.slice(0, 8)),
+				fm.time_estimate,
+			]);
+		}
+
+		dv.table(cols, buff);
+	},
+
 	waitingTask(dv, data) {
 		const buff = [];
 		const cols = ["tasks", "uuid", "estimate", "cause"];
@@ -335,20 +581,163 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
-	basicTask(dv, data) {
+	provisionBase(dv, data) {
 		const buff = [];
-		const cols = ["uuid", "tasks", "estimate", "area"];
+		const cols = ["uuid", "supplier", "content", "estimate"];
 		for (const d of data) {
 			const f = d.file;
 			const fm = f.frontmatter;
-			const area = Helper.getArea(fm);
 			buff.push([
 				dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+				fm.supplier,
 				dv.markdownTaskList(f.tasks),
 				fm.time_estimate,
-				area,
 			]);
 		}
+		dv.table(cols, buff);
+	},
+
+	basicTask(dv, data) {
+		const buff = [];
+		const cols = ["uuid", "tasks", "estimate", "domain"];
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			const domain =
+				Helper.getDomain(fm, true) === undefined
+					? "\\-"
+					: Helper.getDomain(fm);
+
+			if (fm.ref_id === undefined) {
+				// console.log(`name: ${d.file.path}`)
+				// console.log(`tasks: ${d.file.tasks.length}`)
+				// console.log(`tasksB: ${f.tasks.length}`)
+				buff.push([
+					dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+					dv.markdownTaskList(f.tasks),
+					fm.time_estimate,
+					domain,
+				]);
+			} else {
+				const ref = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+				if (ref.length === 0) {
+					throw new Error(
+						`task: '${fm.uuid}' has an undefined ref_id: '${fm.ref_id}'`,
+					);
+				} else {
+					buff.push([
+						dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+						Renderer.makeLinkAlias(dv, ref[0].file),
+						fm.time_estimate,
+						domain,
+					]);
+				}
+			}
+		}
+		dv.table(cols, buff);
+	},
+
+	logs(dv, entries) {
+		const buff = [];
+		let totalTime = 0;
+
+		for (const entry of entries) {
+			const fme = entry.file.frontmatter;
+			const e = [];
+			let start = 0;
+			let stop = 0;
+			if (fme === undefined || fme.created_at === undefined) {
+				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+			}
+
+			start = new Date(fme.created_at);
+			e.push(start.toISOString().slice(0, 10));
+			if (fme.done_at === undefined) {
+				stop = Date.now();
+			} else {
+				stop = new Date(fme.done_at);
+			}
+			totalTime += stop - start;
+			e.push(
+				dv.sectionLink(
+					fme.uuid,
+					"## Content",
+					false,
+					fme.uuid.slice(0, 8),
+				),
+			);
+			e.push(Math.round(((stop - start) / (1000 * 60 * 60)) * 10) / 10);
+			if (fme.reviewed === undefined || fme.reviewed === 0) {
+				e.push(0);
+			} else {
+				e.push(fme.reviewed);
+			}
+			buff.push(e);
+		}
+
+		if (buff.length > 0) {
+			dv.header(2, "Logs");
+			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
+			if (totalTime > 0) {
+				dv.paragraph(
+					`_totalTime (h):_ ${
+						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					}`,
+				);
+			}
+		}
+	},
+
+	mediaWithLogs(dv, data) {
+		const buff = [];
+		const cols = ["uuid", "tasks", "estimate", "current", "domain"];
+
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			const ref = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+			if (ref.length === 0) {
+				throw new Error(
+					`task: '${fm.uuid}' has an undefined ref_id: '${fm.ref_id}'`,
+				);
+			}
+			const domain =
+				Helper.getDomain(fm, true) === undefined
+					? "\\-"
+					: Helper.getDomain(fm);
+			const logEntries = dv
+				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((p) => p.type === Types.Log)
+				.sort((k) => k.created_at, "desc");
+			let totalTime = 0;
+			for (const entry of logEntries) {
+				const fme = entry.file.frontmatter;
+				const e = [];
+				let start = 0;
+				let stop = 0;
+				if (fme === undefined || fme.created_at === undefined) {
+					throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+				}
+
+				start = new Date(fme.created_at);
+				e.push(start.toISOString().slice(0, 10));
+				if (fme.done_at === undefined) {
+					stop = Date.now();
+				} else {
+					stop = new Date(fme.done_at);
+				}
+				totalTime += stop - start;
+			}
+
+			buff.push([
+				dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+				Renderer.makeLinkAlias(dv, ref[0].file),
+				fm.time_estimate,
+				`${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10}h`,
+				domain,
+			]);
+		}
+
 		dv.table(cols, buff);
 	},
 
@@ -393,6 +782,10 @@ export const Renderer = {
 					const [, level, heading] = row;
 					dv.header(level, heading);
 					break;
+				case "paragraph":
+					const [, text] = row;
+					dv.paragraph(text);
+					break;
 				case "array":
 					const [, renderer, data] = row;
 					renderer(dv, data);
@@ -413,6 +806,25 @@ export class Frontmatter {
 
 	constructor(gonext) {
 		this.gonext = gonext;
+	}
+
+	projectParseMeta(dv) {
+		// faute de mieux pour le moment
+		const current = dv.current();
+		const projectName = current.file.folder.slice(Paths.Projects.length+1);
+		const projectDir = current.file.folder;
+		if (projectName.contains("/")) {
+			throw new Error(`projectDir: ${projectDir} folder: ${current.file.folder}`);
+		}
+
+		const pages = dv.pages(`"${projectDir}/meta"`).array();
+		if (pages.length !== 1) {
+			console.log(pages);
+			throw new Error(`len: ${pages.length}`);
+		}
+
+		const page = pages[0];
+		console.log(page.file.frontmatter)
 	}
 
 	getCreatedAt(f): Date {
@@ -504,6 +916,20 @@ export class Frontmatter {
 		return this.parseAllProgressedTasks();
 	}
 
+	parseAllTodoAdHoc() {
+		const fm = this.getCurrentFrontmatter();
+		if (fm === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+
+		const groupBy = this.parseListGroupBy(fm);
+		const filterBy = this.parseListFilterBy(fm);
+		const [before, after] = this.parseListBeforeAfter(fm);
+		const minPriority = Helper.getField(fm.min_priority, 0);
+
+		return [groupBy, filterBy, before, after, minPriority];
+	}
+
 	parseInbox() {
 		const fm = this.getCurrentFrontmatter();
 		if (fm === undefined) {
@@ -514,10 +940,11 @@ export class Frontmatter {
 			? ["logs", "fleeting"]
 			: fm.source;
 		const groupBy = Helper.nilCheck(fm.group_by) ? "none" : fm.group_by;
+		const filterBy = this.parseListFilterBy(fm);
 		const minSize = Helper.nilCheck(fm.min_size) ? 0 : fm.min_size;
 		const maxSize = Helper.nilCheck(fm.max_size) ? 0xffffffff : fm.max_size;
 
-		return [source, groupBy, minSize, maxSize];
+		return [source, groupBy, filterBy, minSize, maxSize];
 	}
 
 	parseJournal() {
@@ -835,7 +1262,889 @@ export class ListMaker {
 		return true;
 	}
 
-	allTodoAdHoc() {
+	projectResourceSheet() {
+		const curFm = this.frontmatter.getCurrentFrontmatter();
+		if (curFm === undefined) {
+			return;
+		}
+
+		const components = curFm.components;
+		const domains = curFm.domains;
+		const noteTypes = curFm.types;
+		const dropTasks = curFm.drop_status;
+		const minMatchingComponent = components.length;
+
+		const rs = {
+			fleeting: [],
+			literature: [],
+			permanent: [],
+			task: [],
+			praxis: [],
+			supply: [],
+			log: [],
+			resource: [],
+			media: [],
+		};
+
+		const Types = {
+			0: "fleeting",
+			1: "literature",
+			2: "permanent",
+			3: "task",
+			4: "praxis",
+			5: "supply",
+			6: "log",
+			7: "resource",
+			8: "media",
+		};
+
+		const pages = this.dv.pages();
+		for (const page of pages) {
+			const fm = page.file.frontmatter;
+			const tags = fm.tags;
+			if (tags === undefined || tags.length === 0) {
+				continue;
+			}
+			const comp = [];
+			for (const t of tags) {
+				if (t.length > 10 && t.slice(0, 10) === "component/") {
+					comp.push(t);
+				}
+			}
+			if (comp.length < components.length) {
+				continue;
+			}
+
+			let missing = 0;
+			for (const component of components) {
+				if (!comp.contains(component)) {
+					missing += 1;
+				}
+			}
+			if (components.length - missing < minMatchingComponent) {
+				continue;
+			}
+
+			if (domains.length > 0) {
+				let domain = "";
+				for (const t of tags) {
+					if (t.length > 7 && t.slice(0, 7) === "domain/") {
+						domain = t;
+						break;
+					}
+				}
+				if (domain === "") {
+					console.warn(
+						`Missing domain for note: '${page.file.path}'`,
+					);
+				}
+				let found = false;
+				for (const d of domains) {
+					if (d === domain) {
+						found = true;
+					}
+				}
+				if (!found) {
+					continue;
+				}
+			}
+
+			if (Types[fm.type] === undefined) {
+				console.warn(`Invalid type for note: '${page.file.path}'`);
+				continue;
+			}
+
+			if (fm.type === 3 || fm.type === 4 || fm.type === 5) {
+				let found = false;
+				for (const status of dropTasks) {
+					if (fm.status === status) {
+						found = true;
+						break;
+					}
+				}
+				if (found) {
+					continue;
+				}
+			}
+
+			let found = false;
+			for (const t of noteTypes) {
+				if (fm.type === t) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				continue;
+			}
+
+			rs[Types[fm.type]].push(page);
+		}
+
+		const resources = [];
+		const types = Object.keys(rs);
+		types.sort();
+		for (const t of types) {
+			if (rs[t].length === 0) {
+				continue;
+			}
+			resources.push(["header", 2, t]);
+			for (const note of rs[t]) {
+				resources.push(["paragraph", this.dv.fileLink(note.file.path)]);
+			}
+		}
+
+		return resources;
+	}
+
+	resourceLocatorGlobal() {
+		const curFm = this.frontmatter.getCurrentFrontmatter();
+		if (curFm === undefined) {
+			return;
+		}
+
+		const components = [];
+		if (Array.isArray(curFm.components)) {
+			for (const component of curFm.components) {
+				if (component.length > 10 && component.slice(0, 10) === "component/") {
+					components.push(component);
+				} else {
+					components.push(`component/${component}`);
+				}
+			}
+		}
+
+		const domains = [];
+		if (Array.isArray(curFm.domains)) {
+			for (const domain of curFm.domains) {
+				if (domain.length > 7 && domain.slice(0, 7) === "domain/") {
+					domains.push(domain);
+				} else {
+					domains.push(`domain/${domain}`);
+				}
+			}
+		}
+
+		const minMatchingComponent = Helper.nilCheck(curFm.min_matching_components) ? components.length : curFm.min_matching_components;
+		const noteTypes = curFm.types;
+		const dropTasks = curFm.drop_status;
+		// type, component
+		// const groupBy = curFm.group_by;
+		const groupBy = "type";
+
+		const rs = {
+			fleeting: [],
+			literature: [],
+			permanent: [],
+			task: [],
+			praxis: [],
+			supply: [],
+			log: [],
+			resource: [],
+			media: [],
+		};
+
+		const Types = {
+			0: "fleeting",
+			1: "literature",
+			2: "permanent",
+			3: "task",
+			4: "praxis",
+			5: "supply",
+			6: "log",
+			7: "resource",
+			8: "media",
+		};
+
+		const pages = this.dv.pages().where((page) => {
+			if (
+				page.file.frontmatter.type !== undefined &&
+				noteTypes.contains(page.file.frontmatter.type)
+			) {
+				return true;
+			}
+
+			return false;
+		});
+
+		for (const page of pages) {
+			const fm = page.file.frontmatter;
+			const tags = fm.tags;
+			if (tags === undefined || tags.length === 0) {
+				continue;
+			}
+
+			const comp = [];
+			for (const t of tags) {
+				if (t.length > 10 && t.slice(0, 10) === "component/") {
+					comp.push(t);
+				}
+			}
+			if (comp.length < components.length) {
+				continue;
+			}
+
+			let missing = 0;
+			for (const component of components) {
+				if (!comp.contains(component)) {
+					missing += 1;
+				}
+			}
+			if (components.length - missing < minMatchingComponent) {
+				continue;
+			}
+
+			if (domains.length > 0) {
+				let domain = "";
+				for (const t of tags) {
+					if (t.length > 7 && t.slice(0, 7) === "domain/") {
+						domain = t;
+						break;
+					}
+				}
+
+				if (domain === "") {
+					console.warn(
+						`Missing domain for note: '${page.file.path}'`,
+					);
+				}
+				let found = false;
+				for (const d of domains) {
+					if (d === domain) {
+						found = true;
+					}
+				}
+				if (!found) {
+					continue;
+				}
+			}
+
+			if (Types[fm.type] === undefined) {
+				console.warn(`Invalid type for note: '${page.file.path}'`);
+				continue;
+			}
+
+			if (fm.type === 3 || fm.type === 4 || fm.type === 5 || fm.type === 8) {
+				let found = false;
+				for (const status of dropTasks) {
+					if (fm.status === status) {
+						found = true;
+						break;
+					}
+				}
+
+				if (found) {
+					continue;
+				}
+			}
+
+			let found = false;
+			for (const t of noteTypes) {
+				if (fm.type === t) {
+					found = true;
+					break;
+				}
+			}
+
+			if (!found) {
+				continue;
+			}
+
+			rs[Types[fm.type]].push(page);
+		}
+
+		const buff = [];
+		const types = Object.keys(rs);
+		types.sort();
+		for (const t of types) {
+			if (rs[t].length === 0) {
+				continue;
+			}
+
+			rs[t].sort((a, b) => {
+				const createdAtA = this.frontmatter.getCreatedAt(a.file);
+				const createdAtB = this.frontmatter.getCreatedAt(b.file);
+				return createdAtA.getTime() - createdAtB.getTime();
+			});
+
+			buff.push(["header", 2, t]);
+			buff.push(["array", Renderer.resourceBase, rs[t]]);
+		}
+
+		return buff;
+	}
+
+	indexAreaDomainMap() {
+		const domainMap = {};
+		const areaMap = {};
+
+		for (const n of this.dv.pages(`"700 Link/Domains"`).array()) {
+			const fm = n.file.frontmatter;
+			if (fm.name === undefined || fm.name === null || fm.name === "") {
+				throw new Error(`Missing field 'name' for: ${n.file.path}`);
+			}
+
+			if (
+				fm.areas === undefined ||
+				fm.areas === undefined ||
+				fm.areas.length === 0
+			) {
+				throw new Error(`Invalid area note: ${n.file.path}`);
+			}
+
+			const domain = `domain/${fm.name}`;
+
+			if (domainMap[domain] === undefined) {
+				domainMap[domain] = [];
+			}
+
+			for (const area of fm.areas) {
+				if (!domainMap[domain].contains(area)) {
+					domainMap[domain].push(area);
+				}
+
+				if (areaMap[area] === undefined) {
+					areaMap[area] = [domain];
+				} else {
+					areaMap[area].push(domain);
+				}
+			}
+		}
+		//
+		// const domains = Object.keys(domainMap);
+		// domains.sort();
+		// for (const domain of domains) {
+		//   dv.header(2, domain);
+		//   for (const area of domainMap[domain]) {
+		//     dv.header(3, area);
+		//   }
+		// }
+
+		// const areas = Object.keys(areaMap);
+		// areas.sort();
+		// for (const area of areas) {
+		//   dv.header(2, area);
+		//   for (const domain of areaMap[area]) {
+		//     dv.header(3, domain);
+		//   }
+		// }
+
+		return [domainMap, areaMap];
+	}
+
+	indexCommon(path: string) {
+		const bins = {};
+		// domainMap domain -> [areas]
+		// areaMap area -> [domains]
+		const [domainMap, areaMap] = this.indexAreaDomainMap();
+		const notes = this.dv.pages(`"${path}"`).array();
+		const rs = [];
+
+		for (const n of notes) {
+			const fm = n.file.frontmatter;
+			if (fm.tags === undefined || fm.tags.length === 0) {
+				continue;
+			}
+
+			const domain = Helper.getDomain(fm);
+			if (domain === "domain/none") {
+				// continue;
+				throw new Error(`Invalid Node: ${n.file.path}`);
+			}
+
+			const components = [];
+
+			for (const t of fm.tags) {
+				if (t.length > 10 && t.slice(0, 10) === "component/") {
+					components.push(t);
+				}
+			}
+
+			if (components.length === 0) {
+				components.push("component/unknown");
+			}
+
+			const areas = domainMap[domain];
+			if (areas === undefined) {
+				throw new Error(
+					`Programming error 'areas' is undefined for domain: '${domain}' note: '${n.file.path}'`,
+				);
+			}
+
+			for (const a of areas) {
+				if (bins[a] === undefined) {
+					bins[a] = {};
+				}
+
+				for (const d of areaMap[a]) {
+					if (bins[a][d] === undefined) {
+						bins[a][d] = {};
+					}
+
+					if (d !== domain) {
+						continue;
+					}
+
+					for (const c of components) {
+						if (bins[a][d][c] === undefined) {
+							bins[a][d][c] = [n];
+						} else {
+							bins[a][d][c].push(n);
+						}
+					}
+				}
+			}
+		}
+
+		const areas = Object.keys(bins);
+		areas.sort();
+		rs.push(["header", 1, "Content"]);
+
+		for (const a of areas) {
+			rs.push(["header", 2, a.slice(5)]);
+			rs.push(["paragraph", `#${a}`]);
+			for (const d of areaMap[a]) {
+				rs.push(["header", 3, d.slice(7)]);
+				rs.push(["paragraph", `#${d}`]);
+
+				const components = Object.keys(bins[a][d]);
+				components.sort();
+				for (const c of components) {
+					rs.push(["header", 4, c.slice(10)]);
+					rs.push(["paragraph", `#${c}`]);
+					const tasks = bins[a][d][c];
+
+					for (const t of tasks) {
+						rs.push(["paragraph", this.dv.fileLink(t.file.path)]);
+					}
+				}
+			}
+		}
+
+		return rs;
+	}
+
+	indexResources() {
+		return this.indexCommon(Paths.Resources);
+	}
+
+	indexContent() {
+		return this.indexCommon(Paths.Refs);
+	}
+
+	indexKnowledge() {
+		const bins = {};
+
+		const [domainMap, areaMap] = this.indexAreaDomainMap();
+		const notes = this.dv.pages().array();
+
+		const rs = [];
+		for (const n of notes) {
+			const fm = n.file.frontmatter;
+			const p = n.file.path;
+
+			// console.log(`p: ${p} slice: ${p.slice(0, Paths.Slipbox.length)} slice2: ${p.slice(0, Paths.Resources.length)}`)
+			if (
+				p.slice(0, Paths.Slipbox.length) !== Paths.Slipbox &&
+				p.slice(0, Paths.Resources.length) !== Paths.Resources
+			) {
+				continue;
+			}
+
+			if (fm.tags === undefined || fm.tags.length === 0) {
+				continue;
+			}
+
+			const domain = Helper.getDomain(fm);
+			if (domain === "domain/none") {
+				continue;
+				// throw new Error(`Invalid Node: ${n.file.path}`);
+			}
+
+			const components = [];
+
+			let isContent = false;
+			for (const t of fm.tags) {
+				if (t.length > 8 && t.slice(0, 8) === "content/") {
+					isContent = true;
+					break;
+				}
+				if (t.length > 10 && t.slice(0, 10) === "component/") {
+					components.push(t);
+				}
+			}
+
+			if (isContent) {
+				continue;
+			}
+
+			if (components.length === 0) {
+				components.push("component/unknown");
+			}
+
+			if (bins[domain] === undefined) {
+				bins[domain] = {};
+			}
+
+			for (const c of components) {
+				if (bins[domain][c] === undefined) {
+					bins[domain][c] = [];
+				}
+				bins[domain][c].push(n);
+			}
+		}
+
+		const domains = Object.keys(bins);
+		domains.sort();
+		rs.push(["header", 1, "Index"]);
+		for (const domain of domains) {
+			if (domainMap[domain] === undefined) {
+				rs.push(["header", 2, "Error"]);
+				rs.push(["paragraph", `domain: ${domain} is not in map`]);
+				rs.push(["paragraph", `#${domain}`]);
+				break;
+			}
+
+			for (const area of domainMap[domain]) {
+				rs.push(["header", 2, area.slice(5)]);
+				rs.push(["paragraph", `#${area}`]);
+
+				rs.push(["header", 3, domain.slice(7)]);
+				rs.push(["paragraph", `#${domain}`]);
+
+				const components = Object.keys(bins[domain]);
+				components.sort();
+				// console.log(`component: ${component.file.path}`);
+
+				for (const component of components) {
+					rs.push(["header", 4, component.slice(10)]);
+					rs.push(["paragraph", `#${component}`]);
+					const tasks = bins[domain][component];
+
+					for (const task of tasks) {
+						rs.push([
+							"paragraph",
+							this.dv.fileLink(task.file.path),
+						]);
+					}
+				}
+			}
+		}
+
+		return rs;
+	}
+
+	allAdHoc() {
+		const fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+
+		const minPriority =
+			fml.min_priority === undefined ? 0 : fml.min_priority;
+		const journal = this.dv.pages(`"${Paths.Journal}"`)[0].file.frontmatter
+			.tasks;
+
+		const rs = [];
+		rs.push(["header", 1, "AdHoc"]);
+
+		const bins = {
+			doable: [],
+			waiting: [],
+			journal: [],
+			maybe: [],
+		};
+
+		const tasks = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = page.file.frontmatter;
+			if (page.type !== Types.Task && page.type !== Types.Praxis && page.type !== Types.Media) {
+				return false;
+			}
+			if (Helper.getProject(fm) !== "project/none") {
+				return false;
+			}
+			if (fm.status === Status.Done) {
+				return false;
+			}
+			return true;
+		});
+
+		for (const task of tasks) {
+			const fm = task.file.frontmatter;
+
+			if (fm.priority !== undefined && fm.priority < minPriority) {
+				continue;
+			}
+
+			if (journal.contains(fm.uuid)) {
+				bins.journal.push(task);
+				continue;
+			}
+
+			if (this.noteHelper.isDoable(task)) {
+				bins.doable.push(task);
+			} else if (fm.status === Status.Todo) {
+				bins.waiting.push(task);
+			} else if (fm.status === Status.Maybe) {
+				bins.maybe.push(task);
+			}
+		}
+
+		// groupBy layer, ??
+		if (bins.doable.length > 0) {
+			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
+			bins.doable.sort(
+				(a, b) =>
+					(a.file.frontmatter.priority -
+						b.file.frontmatter.priority) *
+					-1,
+			);
+			rs.push(["array", Renderer.adhocTaskReady, bins.doable]);
+			// rs.push(["array", Renderer.basicTask, bins.doable]);
+		}
+
+		if (bins.waiting.length > 0) {
+			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
+			const buff = [];
+			for (const task of bins.waiting) {
+				const fm = task.file.frontmatter;
+				if (fm.needs !== undefined && fm.needs.length > 0) {
+					fm.cause = fm.needs;
+				} else if (fm.after !== undefined) {
+					fm.cause = `after: ${fm.after}`;
+				} else {
+					fm.cause = "unknown";
+				}
+				buff.push(task);
+			}
+
+			rs.push(["array", Renderer.waitingTask, buff]);
+		}
+
+		if (bins.maybe.length > 0) {
+			rs.push(["header", 2, `Maybe`]);
+			bins.doable.sort(
+				(a, b) =>
+					(a.file.frontmatter.priority -
+						b.file.frontmatter.priority) *
+					-1,
+			);
+			rs.push(["array", Renderer.adhocTaskReady, bins.maybe]);
+		}
+
+		return rs;
+	}
+
+	projectTodo(project: string) {
+		const fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+		const minPriority =
+			fml.min_priority === undefined ? 0 : fml.min_priority;
+
+		const journal = this.dv.pages(`"${Paths.Journal}"`).array()[0].file
+			.frontmatter.tasks;
+
+		if (project === undefined) {
+			project = Helper.getProject(fml).slice(8);
+		}
+
+		const rs = [];
+		rs.push(["header", 1, project]);
+
+		const bins = {
+			doable: [],
+			waiting: [],
+			journal: [],
+			maybe: [],
+			praxis: [],
+		};
+
+		// const tasks = this.dv
+		// 	.pages(`#${Namespace.Project}/${project}`)
+		// 	.where(
+		// 		(page) =>
+		// 			page.type === Types.Task && page.status === Status.Todo,
+		// 	);
+
+		const tasks = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = page.file.frontmatter;
+			if (page.type !== Types.Task && page.type !== Types.Media) {
+				return false;
+			}
+			if (Helper.getProject(fm) !== `${Namespace.Project}/${project}`) {
+				return false;
+			}
+			if (fm.status === Status.Done) {
+				return false;
+			}
+			return true;
+		});
+
+		for (const task of tasks) {
+			const fm = task.file.frontmatter;
+
+			if (fm.priority !== undefined && fm.priority < minPriority) {
+				continue;
+			}
+
+			if (journal.contains(fm.uuid)) {
+				bins.journal.push(task);
+				continue;
+			}
+
+			if (this.noteHelper.isDoable(task)) {
+				bins.doable.push(task);
+			} else if (fm.status === Status.Todo) {
+				bins.waiting.push(task);
+			} else {
+				bins.maybe.push(task);
+			}
+		}
+
+		// groupBy layer, ??
+		if (bins.doable.length > 0) {
+			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
+			bins.doable.sort(
+				(a, b) =>
+					(a.file.frontmatter.priority -
+						b.file.frontmatter.priority) *
+					-1,
+			);
+			rs.push(["array", Renderer.basicTask, bins.doable]);
+		}
+
+		if (bins.waiting.length > 0) {
+			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
+			const buff = [];
+			for (const task of bins.waiting) {
+				const fm = task.file.frontmatter;
+				if (fm.needs !== undefined && fm.needs.length > 0) {
+					fm.cause = fm.needs;
+				} else if (fm.after !== undefined) {
+					fm.cause = `after: ${fm.after}`;
+				} else {
+					fm.cause = "unknown";
+				}
+				buff.push(task);
+			}
+
+			rs.push(["array", Renderer.waitingTask, buff]);
+		}
+
+		if (bins.maybe.length > 0) {
+			rs.push(["header", 2, `Maybe`]);
+			bins.maybe.sort(
+				(a, b) =>
+					(a.file.frontmatter.priority -
+						b.file.frontmatter.priority) *
+					-1,
+			);
+			rs.push(["array", Renderer.readyTask, bins.maybe]);
+			// rs.push(["array", Renderer.basicTask, bins.doable]);
+		}
+
+		const pages = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => {
+				const fm = page.file.frontmatter;
+				if (page.type !== Types.Praxis) {
+					return false;
+				}
+				if (
+					Helper.getProject(fm) !== `${Namespace.Project}/${project}`
+				) {
+					return false;
+				}
+				if (fm.status === Status.Done) {
+					return false;
+				}
+				return true;
+			})
+			.array();
+
+		if (pages.length > 0) {
+			rs.push(["header", 3, "Praxis"]);
+			rs.push(["array", Renderer.praxisBase, pages]);
+		}
+
+		return rs;
+	}
+
+	projectLogs() {
+		const fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+		const project = Helper.getProject(fml).slice(8);
+		const filterBy = this.frontmatter.parseListFilterBy(fml);
+
+		const rs = [];
+		rs.push(["header", 1, project]);
+
+		const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
+			if (page.type !== Types.Log) {
+				return false;
+			}
+
+			// const f = p.file;
+			// const createdAt = this.frontmatter.getCreatedAt(f);
+			// const now = new Date();
+			// if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
+			// 	return false;
+			// }
+			//
+			// if (p.reviewed !== undefined && p.reviewed >= 1) {
+			// 	return false;
+			// }
+
+			return true;
+		});
+
+		const buff = [];
+		for (const e of logs) {
+			const fm = e.file.frontmatter;
+			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
+				continue;
+			}
+
+			fm.createdAt = this.frontmatter.getCreatedAt(e.file);
+			Assert.True(
+				!Helper.nilCheck(fm.parent_id),
+				`Missing field "parent_id" from log: "${fm.uuid}"`,
+			);
+			const parent = this.dv
+				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
+				.array();
+			Assert.True(
+				parent.length === 1,
+				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
+			);
+			fm.project = Helper.getProject(parent[0].file.frontmatter, true);
+			fm.area = Helper.getArea(parent[0].file.frontmatter, true);
+			if (fm.project !== `project/${project}`) {
+				continue;
+			}
+
+			// if (fm.reviewed !== undefined && fm.reviewed > 0) {
+			// 	continue;
+			// }
+
+			buff.push(e);
+		}
+
+		buff.sort(
+			(a, b) =>
+				b.file.frontmatter.createdAt.getTime() -
+				a.file.frontmatter.createdAt.getTime(),
+		);
+		rs.push(["array", Renderer.inboxEntry, buff]);
+
+		return rs;
+	}
+
+	allMaybeProjects() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, minPriority] =
 			this.frontmatter.parseTodoList();
 		const fml = this.frontmatter.getCurrentFrontmatter();
@@ -843,20 +2152,27 @@ export class ListMaker {
 			throw new Error(`Invalid frontmatter, cannot proceed`);
 		}
 
+		// undefined | null, empty arr, arr 1+ valeurs str
 		const filterBy = fml.filter_by;
-		const today = this.dv.pages(`"${Paths.Journal}"`)[0].file.frontmatter
-			.tasks;
+
+		// undefined, null || string || empty arr || arr.len 1+[str]
+		let groupBy = fml.group_by;
+		if (typeof groupBy === "undefined" || groupBy === "") {
+			groupBy = "";
+		} else if (typeof groupBy === "string") {
+		} else {
+			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
+		}
+
+		const projects = this.noteHelper.getNamespaceContent(Namespace.Project);
+		projects.sort();
+		const rs = [];
+		const bins = {};
+		rs.push(["header", 1, "Maybe"]);
+
 		const tasks = this.dv
 			.pages(`"${Paths.Tasks}"`)
-			.where(
-				(page) =>
-					page.type === Types.Task &&
-					page.status === Status.Todo &&
-					Helper.getProject(page.file.frontmatter, true) ===
-						undefined,
-			);
-
-		const buff = [];
+			.where((page) => page.status === Status.Maybe);
 
 		for (const task of tasks) {
 			const fm = task.file.frontmatter;
@@ -869,38 +2185,24 @@ export class ListMaker {
 					continue;
 				}
 			}
-			// if (
-			// 	!this.filterByNamespace(
-			// 		fm,
-			// 		byAreas,
-			// 		byContexts,
-			// 		byLayers,
-			// 		byOrgs,
-			// 		byProjects,
-			// 	)
-			// ) {
-			// 	continue;
-			// }
+			const project = Helper.getProject(fm);
+			const area = Helper.getArea(fm);
 
-			if (today.contains(fm.uuid)) {
-				continue;
-			}
-
-			if (fm.priority !== undefined && fm.priority < minPriority) {
-				continue;
-			}
-
-			if (this.noteHelper.isDoable(task)) {
-				buff.push(task);
+			if (bins[project] === undefined) {
+				bins[project] = [task];
+			} else {
+				bins[project].push(task);
 			}
 		}
 
-		const rs = [];
-
-		// ["uuid", "task", "estimate", "area"]
-		rs.push(["header", 1, "AdHoc"]);
-		rs.push(["array", Renderer.readyTask, buff]);
-
+		const keys = Object.keys(bins);
+		keys.sort();
+		for (const project of keys) {
+			if (bins[project].length > 0) {
+				rs.push(["header", 2, project]);
+				rs.push(["array", Renderer.readyTask, bins[project]]);
+			}
+		}
 		return rs;
 	}
 
@@ -1138,7 +2440,8 @@ export class ListMaker {
 	}
 
 	allProgressedTasks() {
-		const [groupBy, filterBy, before, after] = this.frontmatter.parseAllProgressedTasks();
+		const [groupBy, filterBy, before, after] =
+			this.frontmatter.parseAllProgressedTasks();
 		const tasks = this.dv
 			.pages(`"${Paths.Tasks}"`)
 			.where(
@@ -1146,7 +2449,7 @@ export class ListMaker {
 					(page.status === Status.Todo ||
 						page.status === Status.Maybe ||
 						page.status === Status.Standby) &&
-					page.type === 3,
+					(page.type === Types.Task || page.type === Types.Praxis),
 			);
 
 		const buff = [];
@@ -1221,10 +2524,10 @@ export class ListMaker {
 			}
 		}
 
+		const keyGetter = Helper.getKey(groupBy);
 		const bins = {};
 		for (const entry of buff) {
-			const createdAt = entry.createdAt;
-			const d = createdAt.toISOString().slice(0, 10);
+			const d = keyGetter(entry);
 			if (bins[d] === undefined) {
 				bins[d] = [entry];
 			} else {
@@ -1238,7 +2541,7 @@ export class ListMaker {
 		// builds rendering array
 		const rs = [];
 		for (const key of keys.reverse()) {
-			rs.push(["header", 3, key]);
+			rs.push(["header", 2, key]);
 			const arr = [];
 			let totalTime = 0;
 
@@ -1288,7 +2591,8 @@ export class ListMaker {
 	}
 
 	allDoneTasks() {
-		const [groupBy, filterBy, before, after] = this.frontmatter.parseAllDoneTasks();
+		const [groupBy, filterBy, before, after] =
+			this.frontmatter.parseAllDoneTasks();
 		const tasks = this.dv
 			.pages(`"${Paths.Tasks}"`)
 			.where((p) => p.status === Status.Done);
@@ -1332,18 +2636,18 @@ export class ListMaker {
 			}
 			const firstEntry = logs[0];
 			if (firstEntry === undefined) {
-				throw new Error(`Programming error "firstEntry" is undefined`);
+				throw new Error(`Programming error 'firstEntry' is undefined`);
 			}
 
 			const lastEntry = logs[logs.length - 1];
 			if (lastEntry === undefined) {
-				throw new Error(`Programming error "firstEntry" is undefined`);
+				throw new Error(`Programming error 'firstEntry' is undefined`);
 			}
 
 			fm.doneAt = new Date(lastEntry.file.frontmatter.created_at);
 			fm.createdAt = new Date(lastEntry.file.frontmatter.done_at);
 			fm.timeEstimate = Helper.durationStringToSec(fm.time_estimate);
-			
+
 			if (!this.filterByDate(fm.doneAt, before, after)) {
 				continue;
 			}
@@ -1351,10 +2655,10 @@ export class ListMaker {
 			buff.push(task);
 		}
 
+		const keyGetter = Helper.getKeyFuck(groupBy);
 		const bins = {};
 		for (const entry of buff) {
-			const doneAt = entry.file.frontmatter.doneAt;
-			const d = doneAt.toISOString().slice(0, 10);
+			const d = keyGetter(entry);
 			if (bins[d] === undefined) {
 				bins[d] = [entry];
 			} else {
@@ -1367,7 +2671,7 @@ export class ListMaker {
 
 		const rs = [];
 		for (const key of keys.reverse()) {
-			rs.push(["header",2, key]);
+			rs.push(["header", 2, key]);
 			const arr = [];
 			let totalTime = 0;
 
@@ -1420,7 +2724,8 @@ export class ListMaker {
 	}
 
 	inbox() {
-		let [source, groupBy, minSize, maxSize] = this.frontmatter.parseInbox();
+		let [source, groupBy, filterBy, minSize, maxSize] =
+			this.frontmatter.parseInbox();
 		const rs = [];
 		const buff = [];
 		const bins = {};
@@ -1445,6 +2750,13 @@ export class ListMaker {
 			const fleetings = this.dv.pages(`"${Paths.Inbox}"`).array();
 			for (const e of fleetings) {
 				const fm = e.file.frontmatter;
+				if (
+					filterBy.length > 0 &&
+					!this.nameInNamespace(fm, filterBy)
+				) {
+					continue;
+				}
+
 				e.file.frontmatter.createdAt = this.frontmatter.getCreatedAt(
 					e.file,
 				);
@@ -1483,6 +2795,13 @@ export class ListMaker {
 
 			for (const e of logs) {
 				const fm = e.file.frontmatter;
+				if (
+					filterBy.length > 0 &&
+					!this.nameInNamespace(fm, filterBy)
+				) {
+					continue;
+				}
+
 				fm.createdAt = this.frontmatter.getCreatedAt(e.file);
 				Assert.True(
 					!Helper.nilCheck(fm.parent_id),
@@ -1583,6 +2902,30 @@ export class ListMaker {
 		return rs;
 	}
 
+	praxis() {
+		const pages = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => {
+				if (page.file.frontmatter.type !== Types.Praxis) {
+					return false;
+				}
+
+				if (page.file.frontmatter.status !== Status.Todo) {
+					return false;
+				}
+
+				return true;
+			})
+			.array();
+
+		console.log(pages.length);
+		const rs = [];
+		rs.push(["header", 1, "Praxis"]);
+		rs.push(["array", Renderer.basicTask, pages]);
+
+		return rs;
+	}
+
 	journal() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, fmTasks] =
 			this.frontmatter.parseJournal();
@@ -1598,7 +2941,10 @@ export class ListMaker {
 			waiting: [],
 			done: [],
 			active: [],
+			leisure: [],
+			media: [],
 		};
+
 		const tasks = this.dv
 			.pages(`"${Paths.Tasks}"`)
 			.where((k) => fmTasks.contains(k.uuid))
@@ -1606,23 +2952,6 @@ export class ListMaker {
 		let totalEstimate = 0;
 		for (const task of tasks) {
 			const fmt = task.file.frontmatter;
-			// if (
-			// 	!this.filterByNamespace(
-			// 		fmt,
-			// 		byAreas,
-			// 		byContexts,
-			// 		byLayers,
-			// 		byOrgs,
-			// 		byProjects,
-			// 	)
-			// ) {
-			// 	continue;
-			// }
-
-			// const c = Helper.getContext(fmt);
-			// if (!ctx.contains(c)) {
-			// 	ctx.push(c);
-			// }
 
 			if (fmt.type === Types.Praxis) {
 				const logs = this.dv
@@ -1645,6 +2974,16 @@ export class ListMaker {
 				}
 			}
 
+			if (Helper.getDomain(fmt) === "domain/leisure") {
+				bins.leisure.push(task);
+				continue;
+			}
+
+			if (fmt.type === Types.Media) {
+				bins.media.push(task);
+				continue;
+			}
+
 			if (this.noteHelper.isDoable(task)) {
 				const timeEstimate = fmt.time_estimate;
 				if (timeEstimate !== undefined) {
@@ -1654,9 +2993,9 @@ export class ListMaker {
 				continue;
 			}
 
-			if (task.file.frontmatter.status === Status.Done) {
+			if (fmt.status === Status.Done) {
 				bins.done.push(task);
-			} else {
+			} else if (fmt.status !== Status.Doing) {
 				bins.waiting.push(task);
 			}
 		}
@@ -1691,7 +3030,14 @@ export class ListMaker {
 				const res = {};
 				for (const e of bins.doable) {
 					const fm = e.file.frontmatter;
-					const t = Helper.getTag(fm, groupBy);
+					let t = Helper.getTag(fm, groupBy);
+					if (
+						groupBy === "context" &&
+						t === "context/any" &&
+						Helper.getOrg(fm) !== "org/none"
+					) {
+						t = "context/work";
+					}
 					if (res[t] === undefined) {
 						res[t] = [e];
 					} else {
@@ -1736,9 +3082,43 @@ export class ListMaker {
 			arr.push(["array", Renderer.waitingTask, buff]);
 		}
 
+		if (bins.media.length > 0) {
+			arr.push(["header", 2, `Media (${bins.media.length})`]);
+			arr.push(["array", Renderer.mediaWithLogs, bins.media]);
+		}
+
 		if (bins.done.length > 0) {
 			arr.push(["header", 2, `Done (${bins.done.length})`]);
 			arr.push(["array", Renderer.basicTask, bins.done]);
+		}
+
+		if (bins.leisure.length > 0) {
+			arr.push(["header", 2, `Leisure (${bins.leisure.length})`]);
+			arr.push(["array", Renderer.mediaWithLogs, bins.leisure]);
+		}
+
+		const provisions = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => {
+				if (page.file.frontmatter.type === undefined) {
+					return false;
+				}
+				if (page.file.frontmatter.type !== Types.Provision) {
+					return false;
+				}
+				if (page.file.frontmatter.status === undefined) {
+					return false;
+				}
+				if (page.file.frontmatter.status !== Status.Todo) {
+					return false;
+				}
+				return true;
+			})
+			.array();
+
+		if (provisions.length > 0) {
+			arr.push(["header", 2, `Provision (${provisions.length})`]);
+			arr.push(["array", Renderer.provisionBase, provisions]);
 		}
 
 		return arr;
