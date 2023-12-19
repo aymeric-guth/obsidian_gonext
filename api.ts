@@ -1,3 +1,4 @@
+import { group } from "console";
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
 class ValidationError extends Error {
@@ -8,7 +9,7 @@ class ValidationError extends Error {
 }
 
 export const Assert = {
-	True(predicate: bool, message: string) {
+	True(predicate: boolean, message: string) {
 		if (!predicate) {
 			throw new ValidationError(message);
 		}
@@ -16,7 +17,7 @@ export const Assert = {
 };
 
 export const Helper = {
-	nilCheck(val: Any): bool {
+	nilCheck(val: any): boolean {
 		return val === undefined || val === null;
 	},
 
@@ -308,8 +309,7 @@ export const AutoField = {
 			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
 			if (totalTime > 0) {
 				dv.paragraph(
-					`_totalTime (h):_ ${
-						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
 					}`,
 				);
 			}
@@ -386,7 +386,7 @@ export const Renderer = {
 					(anchor = "Task"),
 				),
 				Renderer.makeLinkAlias(dv, f),
-				Math.round(((delta) / (1000 * 60 * 60)) * 10) / 10,
+				Math.round((delta / (1000 * 60 * 60)) * 10) / 10,
 			]);
 		}
 
@@ -722,8 +722,7 @@ export const Renderer = {
 			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
 			if (totalTime > 0) {
 				dv.paragraph(
-					`_totalTime (h):_ ${
-						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
 					}`,
 				);
 			}
@@ -1796,31 +1795,54 @@ export class ListMaker {
 	}
 
 	indexKnowledge() {
+		const curFm = this.frontmatter.getCurrentFrontmatter();
+		if (curFm === undefined) {
+			return;
+		}
+
+		const allComponents = [];
+		if (Array.isArray(curFm.components)) {
+			for (const component of curFm.components) {
+				if (
+					component.length > 10 &&
+					component.slice(0, 10) === "component/"
+				) {
+					allComponents.push(component);
+				} else {
+					allComponents.push(`component/${component}`);
+				}
+			}
+		}
+
+		const allDomains = [];
+		if (Array.isArray(curFm.domains)) {
+			for (const domain of curFm.domains) {
+				if (domain.length > 7 && domain.slice(0, 7) === "domain/") {
+					allDomains.push(domain);
+				} else {
+					allDomains.push(`domain/${domain}`);
+				}
+			}
+		}
+
 		const bins = {};
+		let groupBy = "domain";
+		if (!Helper.nilCheck(curFm.group_by)) {
+			groupBy = curFm.group_by;
+		}
 
 		const [domainMap, areaMap] = this.indexAreaDomainMap();
-		const notes = this.dv.pages().array();
+		const notes = this.dv.pages(`"${Paths.Slipbox}"`).array();
 
 		const rs = [];
 		for (const n of notes) {
 			const fm = n.file.frontmatter;
-			const p = n.file.path;
-
-			// console.log(`p: ${p} slice: ${p.slice(0, Paths.Slipbox.length)} slice2: ${p.slice(0, Paths.Resources.length)}`)
-			if (
-				p.slice(0, Paths.Slipbox.length) !== Paths.Slipbox &&
-				p.slice(0, Paths.Resources.length) !== Paths.Resources
-			) {
-				continue;
-			}
-
 			if (fm.tags === undefined || fm.tags.length === 0) {
 				continue;
 			}
 
 			const domain = Helper.getDomain(fm);
 			if (domain === "domain/none") {
-				// continue;
 				throw new Error(`Invalid Node: ${n.file.path}`);
 			}
 
@@ -1857,30 +1879,36 @@ export class ListMaker {
 			}
 		}
 
-		const domains = Object.keys(bins);
-		domains.sort();
-		rs.push(["header", 1, "Index"]);
-		for (const domain of domains) {
-			if (domainMap[domain] === undefined) {
-				rs.push(["header", 2, "Error"]);
-				rs.push(["paragraph", `domain: ${domain} is not in map`]);
+			rs.push(["header", 1, "Index"]);
+		if (groupBy === "domain") {
+			const domains = Object.keys(bins);
+			domains.sort();
+			for (const domain of domains) {
+				if (domainMap[domain] === undefined) {
+					rs.push(["header", 2, "Error"]);
+					rs.push(["paragraph", `domain: ${domain} is not in map`]);
+					rs.push(["paragraph", `#${domain}`]);
+					break;
+				}
+
+				if (allDomains.length > 0 && !allDomains.contains(domain)) {
+					continue;
+				}
+
+				rs.push(["header", 2, domain.slice(7)]);
 				rs.push(["paragraph", `#${domain}`]);
-				break;
-			}
-
-			for (const area of domainMap[domain]) {
-				rs.push(["header", 2, area.slice(5)]);
-				rs.push(["paragraph", `#${area}`]);
-
-				rs.push(["header", 3, domain.slice(7)]);
-				rs.push(["paragraph", `#${domain}`]);
-
 				const components = Object.keys(bins[domain]);
 				components.sort();
-				// console.log(`component: ${component.file.path}`);
 
 				for (const component of components) {
-					rs.push(["header", 4, component.slice(10)]);
+					if (
+						allComponents.length > 0 &&
+						!allComponents.contains(component)
+					) {
+						continue;
+					}
+
+					rs.push(["header", 3, component.slice(10)]);
 					rs.push(["paragraph", `#${component}`]);
 					const tasks = bins[domain][component];
 
@@ -1892,7 +1920,51 @@ export class ListMaker {
 					}
 				}
 			}
-		}
+		} else {
+			const buff = {};
+			for (const domain of Object.keys(bins)) {
+				for (const component of Object.keys(bins[domain])) {
+					if (buff[component] === undefined) {
+						buff[component] = {};
+					}
+					if (buff[component][domain] === undefined) {
+						buff[component][domain] = [...bins[domain][component]];
+					} else {
+						for (const task of bins[domain][component]) {
+							buff[component][domain].push(task);
+						}
+					}
+				}
+			}
+
+			const components = Object.keys(buff);
+			components.sort();
+			for (const component of components) {
+				rs.push(["header", 2, component.slice(10)]);
+				rs.push(["paragraph", `#${component}`]);
+				const domains = Object.keys(buff[component]);
+				domains.sort();
+
+				for (const domain of domains) {
+					// if (
+					// 	allDomains.length > 0 &&
+					// 	!allDomains.contains(domain)
+					// ) {
+					// 	continue;
+					// }
+
+					rs.push(["header", 3, domain.slice(7)]);
+					rs.push(["paragraph", `#${domain}`]);
+					const tasks = buff[component][domain];
+
+					for (const task of tasks) {
+						rs.push([
+							"paragraph",
+							this.dv.fileLink(task.file.path),
+						]);
+					}
+				}
+			}}
 
 		return rs;
 	}
@@ -2913,7 +2985,7 @@ export class ListMaker {
 			}
 		}
 
-		const sortBySizeThenDate = function (a, b) {
+		const sortBySizeThenDate = function(a, b) {
 			const fA = a.file;
 			const fB = b.file;
 			if (fA.size !== fB.size) {
