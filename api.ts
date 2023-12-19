@@ -357,6 +357,42 @@ export const Renderer = {
 		);
 	},
 
+	projectLogs(dv, data) {
+		const cols = ["task_id", "log_id", "took"];
+		const buff = [];
+		for (const d of data) {
+			const f = d.file;
+			const fm = d.file.frontmatter;
+			Assert.True(
+				!Helper.nilCheck(fm.uuid),
+				`"uuid" id not defined for: ${f.path}`,
+			);
+			Assert.True(
+				!Helper.nilCheck(fm.type),
+				`"type" id not defined for: ${f.path}`,
+			);
+
+			const createdAt = new Date(fm.created_at);
+			const doneAt = new Date(fm.done_at);
+			const delta = doneAt.getTime() - createdAt.getTime();
+
+			buff.push([
+				Renderer.makeLinkShortUUID(
+					dv,
+					{
+						path: `${Paths.Tasks}/${fm.parent_id}`,
+						frontmatter: { uuid: fm.parent_id },
+					},
+					(anchor = "Task"),
+				),
+				Renderer.makeLinkAlias(dv, f),
+				Math.round(((delta) / (1000 * 60 * 60)) * 10) / 10,
+			]);
+		}
+
+		dv.table(cols, buff);
+	},
+
 	inboxEntry(dv, data) {
 		const cols = ["uuid", "type", "age", "size", "project", "area"];
 		const buff = [];
@@ -411,9 +447,13 @@ export const Renderer = {
 					break;
 
 				case Types.Media:
-					const pages = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+					const pages = dv
+						.pages(`"${Paths.Refs}/${fm.ref_id}"`)
+						.array();
 					if (pages.length !== 1) {
-						throw new Error(`adhocTaskReady: ref_id: "${fm.ref_id}" not found`);
+						throw new Error(
+							`adhocTaskReady: ref_id: "${fm.ref_id}" not found`,
+						);
 					}
 
 					buff.push([
@@ -425,7 +465,9 @@ export const Renderer = {
 					break;
 
 				default:
-					throw new Error(`adhocTaskReady: Unhandled type: '${fm.type}'`);
+					throw new Error(
+						`adhocTaskReady: Unhandled type: '${fm.type}'`,
+					);
 			}
 		}
 
@@ -811,10 +853,14 @@ export class Frontmatter {
 	projectParseMeta(dv) {
 		// faute de mieux pour le moment
 		const current = dv.current();
-		const projectName = current.file.folder.slice(Paths.Projects.length+1);
+		const projectName = current.file.folder.slice(
+			Paths.Projects.length + 1,
+		);
 		const projectDir = current.file.folder;
 		if (projectName.contains("/")) {
-			throw new Error(`projectDir: ${projectDir} folder: ${current.file.folder}`);
+			throw new Error(
+				`projectDir: ${projectDir} folder: ${current.file.folder}`,
+			);
 		}
 
 		const pages = dv.pages(`"${projectDir}/meta"`).array();
@@ -824,7 +870,7 @@ export class Frontmatter {
 		}
 
 		const page = pages[0];
-		console.log(page.file.frontmatter)
+		console.log(page.file.frontmatter);
 	}
 
 	getCreatedAt(f): Date {
@@ -1406,7 +1452,10 @@ export class ListMaker {
 		const components = [];
 		if (Array.isArray(curFm.components)) {
 			for (const component of curFm.components) {
-				if (component.length > 10 && component.slice(0, 10) === "component/") {
+				if (
+					component.length > 10 &&
+					component.slice(0, 10) === "component/"
+				) {
 					components.push(component);
 				} else {
 					components.push(`component/${component}`);
@@ -1426,7 +1475,10 @@ export class ListMaker {
 		}
 
 		let minMatchingComponent = 0;
-		if (!Helper.nilCheck(curFm.min_matching_components) && components.length > 0) {
+		if (
+			!Helper.nilCheck(curFm.min_matching_components) &&
+			components.length > 0
+		) {
 			minMatchingComponent = curFm.min_matching_components;
 		} else if (components.length > 0) {
 			minMatchingComponent = components.length;
@@ -1530,7 +1582,12 @@ export class ListMaker {
 				continue;
 			}
 
-			if (fm.type === 3 || fm.type === 4 || fm.type === 5 || fm.type === 8) {
+			if (
+				fm.type === 3 ||
+				fm.type === 4 ||
+				fm.type === 5 ||
+				fm.type === 8
+			) {
 				let found = false;
 				for (const status of dropTasks) {
 					if (fm.status === status) {
@@ -1763,8 +1820,8 @@ export class ListMaker {
 
 			const domain = Helper.getDomain(fm);
 			if (domain === "domain/none") {
-				continue;
-				// throw new Error(`Invalid Node: ${n.file.path}`);
+				// continue;
+				throw new Error(`Invalid Node: ${n.file.path}`);
 			}
 
 			const components = [];
@@ -1863,7 +1920,11 @@ export class ListMaker {
 
 		const tasks = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
 			const fm = page.file.frontmatter;
-			if (page.type !== Types.Task && page.type !== Types.Praxis && page.type !== Types.Media) {
+			if (
+				page.type !== Types.Task &&
+				page.type !== Types.Praxis &&
+				page.type !== Types.Media
+			) {
 				return false;
 			}
 			if (Helper.getProject(fm) !== "project/none") {
@@ -2108,7 +2169,7 @@ export class ListMaker {
 			return true;
 		});
 
-		const buff = [];
+		const buff = {};
 		for (const e of logs) {
 			const fm = e.file.frontmatter;
 			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
@@ -2136,16 +2197,32 @@ export class ListMaker {
 			// if (fm.reviewed !== undefined && fm.reviewed > 0) {
 			// 	continue;
 			// }
+			if (Helper.nilCheck(fm.done_at)) {
+				continue;
+			}
+			const date = fm.done_at.slice(0, 10);
 
-			buff.push(e);
+			if (buff[date] === undefined) {
+				buff[date] = [e];
+			} else {
+				buff[date].push(e);
+			}
 		}
 
-		buff.sort(
-			(a, b) =>
-				b.file.frontmatter.createdAt.getTime() -
-				a.file.frontmatter.createdAt.getTime(),
-		);
-		rs.push(["array", Renderer.inboxEntry, buff]);
+		const keys = Object.keys(buff);
+		keys.sort();
+		for (const date of keys) {
+			buff[date].sort(
+				(a, b) =>
+					b.file.frontmatter.createdAt.getTime() -
+					a.file.frontmatter.createdAt.getTime(),
+			);
+		}
+
+		for (const date of keys.reverse()) {
+			rs.push(["header", 3, date]);
+			rs.push(["array", Renderer.projectLogs, buff[date]]);
+		}
 
 		return rs;
 	}
