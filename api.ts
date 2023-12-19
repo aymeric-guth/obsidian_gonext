@@ -1425,7 +1425,13 @@ export class ListMaker {
 			}
 		}
 
-		const minMatchingComponent = Helper.nilCheck(curFm.min_matching_components) ? components.length : curFm.min_matching_components;
+		let minMatchingComponent = 0;
+		if (!Helper.nilCheck(curFm.min_matching_components) && components.length > 0) {
+			minMatchingComponent = curFm.min_matching_components;
+		} else if (components.length > 0) {
+			minMatchingComponent = components.length;
+		}
+
 		const noteTypes = curFm.types;
 		const dropTasks = curFm.drop_status;
 		// type, component
