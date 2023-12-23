@@ -358,7 +358,7 @@ export const Renderer = {
 	},
 
 	projectLogs(dv, data) {
-		const cols = ["task_id", "log_id", "took"];
+		const cols = ["type", "task_id", "log_id", "took", "reviewed"];
 		const buff = [];
 		for (const d of data) {
 			const f = d.file;
@@ -376,18 +376,59 @@ export const Renderer = {
 			const doneAt = new Date(fm.done_at);
 			const delta = doneAt.getTime() - createdAt.getTime();
 
-			buff.push([
-				Renderer.makeLinkShortUUID(
-					dv,
-					{
-						path: `${Paths.Tasks}/${fm.parent_id}`,
-						frontmatter: { uuid: fm.parent_id },
-					},
-					(anchor = "Task"),
-				),
-				Renderer.makeLinkAlias(dv, f),
-				Math.round((delta / (1000 * 60 * 60)) * 10) / 10,
-			]);
+			const record = {
+				taskId: "",
+				logId: Renderer.makeLinkAlias(dv, f),
+				took: Math.round((delta / (1000 * 60 * 60)) * 10) / 10,
+				reviewed: Helper.nilCheck(fm.reviewed) ? 0 : fm.reviewed,
+			};
+			const pages = dv.pages(`"${Paths.Tasks}/${fm.parent_id}"`).array();
+			if (pages.length !== 1) {
+				throw new Error(
+					`parent task with id: "${fm.parent_id}" does not exists`,
+				);
+			}
+			const parent = pages[0];
+			switch (parent.file.frontmatter.type) {
+				case Types.Task:
+					record.type = `<font color=8B0000>task</font>`;
+					record.taskId = Renderer.makeLinkShortUUID(
+						dv,
+						parent.file,
+						"Task",
+					);
+					break;
+				case Types.Media:
+					record.type = `<font color=00008B>media</font>`;
+					record.taskId = Renderer.makeLinkShortUUID(
+						dv,
+						parent.file,
+						"Content",
+					);
+					break;
+				aalkjkljlkjfsidfsldfj
+				case Types.Praxis:
+					record.type = `<font color=FF8C00>praxis</font>`;
+					record.taskId = Renderer.makeLinkShortUUID(
+						dv,
+						parent.file,
+						"Content",
+					);
+					break;
+				case Types.Provision:
+					record.type = `<font color=DC143C>provision</font>`;
+					record.taskId = Renderer.makeLinkShortUUID(
+						dv,
+						parent.file,
+						"Content",
+					);
+					break;
+				default:
+					throw new Error(
+						`Renderer.projectLogs: type "${parentTask.file.frontmatter.type}" not implemented`,
+					);
+			}
+			buff.push([record.type, record.taskId, record.logId, record.took, record.reviewed]);
 		}
 
 		dv.table(cols, buff);
@@ -411,15 +452,46 @@ export const Renderer = {
 			const now = new Date();
 			const delta = now.getTime() - fm.createdAt.getTime();
 			const since = Helper.msecToStringDuration(delta);
+			const record = {
+				uuid: Renderer.makeLinkAlias(dv, f),
+				type: Helper.numberTypeToString(fm.type),
+				since: `${since}`,
+				size: f.size,
+				project: fm.project === undefined ? "\\-" : fm.project,
+				domain: fm.domain === undefined ? "\\-" : fm.domain,
+			};
+
+			if (record.type === "log") {
+				const pages = dv.pages(`"${Paths.Tasks}/${fm.parent_id}"`).array();
+				if (pages.length !== 1) {
+					throw new Error(`${fm.parent_id} ${fm.id}`);
+				}
+				const parent = pages[0];
+				switch (parent.type) {
+					case Types.Task:
+						record.type = `<font color=8B0000>task</font>`;
+						break;
+					case Types.Praxis:
+						record.type = `<font color=FF8C00>praxis</font>`;
+						break;
+					case Types.Media:
+						record.type = `<font color=00008B>media</font>`;
+						break;
+					case Types.Provision:
+						record.type = `<font color=DC143C>provision</font>`;
+						break;
+					default:
+						break;
+				}
+			}
+
 			buff.push([
-				Renderer.makeLinkAlias(dv, f),
-				Helper.numberTypeToString(fm.type),
-				`${since}`,
-				f.size,
-				fm.project === undefined ? "\\-" : fm.project,
-				fm.area === undefined ? "\\-" : fm.area,
-				// Helper.getProject(fm, true),
-				// Helper.getArea(fm, true),
+				record.uuid,
+				record.type,
+				record.since,
+				record.size,
+				record.project,
+				record.domain,
 			]);
 		}
 
@@ -438,6 +510,15 @@ export const Renderer = {
 
 			switch (fm.type) {
 				case Types.Task:
+					buff.push([
+						Renderer.makeLinkAlias(dv, f, "Task"),
+						dv.markdownTaskList(f.tasks),
+						fm.time_estimate,
+						Helper.getField(Helper.getDomain(fm, true), "\\-"),
+					]);
+					break;
+
+				case Types.Praxis:
 					buff.push([
 						Renderer.makeLinkAlias(dv, f, "Task"),
 						dv.markdownTaskList(f.tasks),
@@ -1474,17 +1555,16 @@ export class ListMaker {
 		}
 
 		let minMatchingComponent = 0;
-		if (
-			!Helper.nilCheck(curFm.min_matching_components) &&
-			components.length > 0
-		) {
-			minMatchingComponent = curFm.min_matching_components;
-		} else if (components.length > 0) {
-			minMatchingComponent = components.length;
+		if (components.length > 0) {
+			if (Helper.nilCheck(curFm.min_matching_components)) {
+				minMatchingComponent = components.length;
+			} else {
+				minMatchingComponent = curFm.min_matching_components;
+			}
 		}
 
 		const noteTypes = curFm.types;
-		const dropTasks = curFm.drop_status;
+		const dropTasks = Helper.nilCheck(curFm.drop_status) ? [] : curFm.drop_status;
 		// type, component
 		// const groupBy = curFm.group_by;
 		const groupBy = "type";
@@ -1879,7 +1959,7 @@ export class ListMaker {
 			}
 		}
 
-			rs.push(["header", 1, "Index"]);
+		rs.push(["header", 1, "Index"]);
 		if (groupBy === "domain") {
 			const domains = Object.keys(bins);
 			domains.sort();
@@ -1913,9 +1993,10 @@ export class ListMaker {
 					const tasks = bins[domain][component];
 
 					for (const task of tasks) {
+						
 						rs.push([
 							"paragraph",
-							this.dv.fileLink(task.file.path),
+							Renderer.makeLinkAlias(this.dv, task.file, "Content"),
 						]);
 					}
 				}
@@ -1964,7 +2045,8 @@ export class ListMaker {
 						]);
 					}
 				}
-			}}
+			}
+		}
 
 		return rs;
 	}
@@ -2206,6 +2288,79 @@ export class ListMaker {
 		if (pages.length > 0) {
 			rs.push(["header", 3, "Praxis"]);
 			rs.push(["array", Renderer.praxisBase, pages]);
+		}
+
+		return rs;
+	}
+
+	projectLogsAdhoc() {
+		const fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			throw new Error(`Invalid frontmatter, cannot proceed`);
+		}
+		const filterBy = this.frontmatter.parseListFilterBy(fml);
+
+		const rs = [];
+		rs.push(["header", 1, "AdHoc"]);
+
+		const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
+			if (page.type !== Types.Log) {
+				return false;
+			}
+
+			return true;
+		});
+
+		const buff = {};
+		for (const e of logs) {
+			const fm = e.file.frontmatter;
+			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
+				continue;
+			}
+
+			fm.createdAt = this.frontmatter.getCreatedAt(e.file);
+			Assert.True(
+				!Helper.nilCheck(fm.parent_id),
+				`Missing field "parent_id" from log: "${fm.uuid}"`,
+			);
+			const parent = this.dv
+				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
+				.array();
+			Assert.True(
+				parent.length === 1,
+				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
+			);
+			fm.project = Helper.getProject(parent[0].file.frontmatter, true);
+			fm.area = Helper.getArea(parent[0].file.frontmatter, true);
+			if (fm.project !== undefined) {
+				continue;
+			}
+
+			if (Helper.nilCheck(fm.done_at)) {
+				continue;
+			}
+
+			const date = fm.done_at.slice(0, 10);
+			if (buff[date] === undefined) {
+				buff[date] = [e];
+			} else {
+				buff[date].push(e);
+			}
+		}
+
+		const keys = Object.keys(buff);
+		keys.sort();
+		for (const date of keys) {
+			buff[date].sort(
+				(a, b) =>
+					b.file.frontmatter.createdAt.getTime() -
+					a.file.frontmatter.createdAt.getTime(),
+			);
+		}
+
+		for (const date of keys.reverse()) {
+			rs.push(["header", 3, date]);
+			rs.push(["array", Renderer.projectLogs, buff[date]]);
 		}
 
 		return rs;
