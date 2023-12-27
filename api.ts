@@ -316,6 +316,37 @@ export const AutoField = {
 		}
 	},
 
+	revisions(dv, entries) {
+		const current = dv.current()
+		const cols = ["", "created_at", "uuid"];
+		const buff = [];
+		for (const entry of entries) {
+			const e = [];
+			const fm = entry.file.frontmatter;
+			if (current.file.frontmatter.uuid === fm.uuid) {
+				e.push("->");
+			} else {
+				e.push("");
+			}
+			const start = new Date(fm.created_at);
+			e.push(start.toISOString().slice(0, 10));
+			e.push(
+				dv.sectionLink(
+					fm.uuid,
+					"## Content",
+					false,
+					fm.uuid.slice(0, 8),
+				),
+			);
+			buff.push(e);
+		}
+
+		if (buff.length > 1) {
+			dv.header(2, "Revisions");
+			dv.table(cols, buff);
+		}
+	},
+
 	media(dv) {
 		const current = dv.current();
 		const fm = current.file.frontmatter;
@@ -335,6 +366,48 @@ export const AutoField = {
 			.where((p) => p.type === 6)
 			.sort((k) => k.created_at, "desc");
 		AutoField.logs(dv, logEntries);
+	},
+
+	revisionsList(dv, root: string) {
+		let head = dv.current();
+		while (true) {
+			const pages = dv.pages(`"${root}"`).where((page) => page.file.frontmatter.next === head.file.frontmatter.uuid);
+			if (pages.length > 1) {
+				throw new Error();
+			} else if (pages.length === 0) {
+				break;
+			}
+			head = pages[0];
+		}
+
+		const buff = [];
+		let cur = head;
+		while (true) {
+			buff.push(cur);
+			const fm = cur.file.frontmatter;
+			if (fm.next === undefined) {
+				break;
+			}
+			const pages = dv.pages(`"${Paths.Slipbox}/${fm.next}"`);
+			if (pages.length === 0) {
+				break;
+			}
+			cur = pages[0];
+		}
+
+		return buff;
+	},
+
+	permanent(dv) {
+		const buff = AutoField.revisionsList(dv, Paths.Slipbox);
+		AutoField.tags(dv, dv.current().file.frontmatter);
+		AutoField.revisions(dv, buff);
+	},
+
+	resource(dv) {
+		const buff = AutoField.revisionsList(dv, Paths.Resources);
+		AutoField.tags(dv, dv.current().file.frontmatter);
+		AutoField.revisions(dv, buff);
 	},
 };
 
@@ -406,7 +479,7 @@ export const Renderer = {
 						"Content",
 					);
 					break;
-				aalkjkljlkjfsidfsldfj
+					aalkjkljlkjfsidfsldfj;
 				case Types.Praxis:
 					record.type = `<font color=FF8C00>praxis</font>`;
 					record.taskId = Renderer.makeLinkShortUUID(
@@ -428,7 +501,13 @@ export const Renderer = {
 						`Renderer.projectLogs: type "${parentTask.file.frontmatter.type}" not implemented`,
 					);
 			}
-			buff.push([record.type, record.taskId, record.logId, record.took, record.reviewed]);
+			buff.push([
+				record.type,
+				record.taskId,
+				record.logId,
+				record.took,
+				record.reviewed,
+			]);
 		}
 
 		dv.table(cols, buff);
@@ -462,7 +541,9 @@ export const Renderer = {
 			};
 
 			if (record.type === "log") {
-				const pages = dv.pages(`"${Paths.Tasks}/${fm.parent_id}"`).array();
+				const pages = dv
+					.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
+					.array();
 				if (pages.length !== 1) {
 					throw new Error(`${fm.parent_id} ${fm.id}`);
 				}
@@ -892,7 +973,7 @@ export const Renderer = {
 			"tookAcc",
 			"deltaAcc",
 			"project",
-			"area",
+			"domain",
 		];
 		dv.table(cols, data);
 	},
@@ -1564,7 +1645,9 @@ export class ListMaker {
 		}
 
 		const noteTypes = curFm.types;
-		const dropTasks = Helper.nilCheck(curFm.drop_status) ? [] : curFm.drop_status;
+		const dropTasks = Helper.nilCheck(curFm.drop_status)
+			? []
+			: curFm.drop_status;
 		// type, component
 		// const groupBy = curFm.group_by;
 		const groupBy = "type";
@@ -1993,11 +2076,10 @@ export class ListMaker {
 					const tasks = bins[domain][component];
 
 					for (const task of tasks) {
-						
-						rs.push([
-							"paragraph",
-							Renderer.makeLinkAlias(this.dv, task.file, "Content"),
-						]);
+						// rs.push([
+						// 	"paragraph",
+						// 	Renderer.makeLinkAlias(this.dv, task.file, "Content"),
+						// ]);
 					}
 				}
 			}
@@ -2699,7 +2781,7 @@ export class ListMaker {
 				area = "";
 			}
 			entry.project = project;
-			entry.area = area;
+			entry.domain = Helper.getField(Helper.getDomain(fm, true), "");
 
 			buff.push(entry);
 		}
@@ -2737,7 +2819,7 @@ export class ListMaker {
 				);
 				buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
 				buff.push(`${e.project}`);
-				buff.push(`${e.area}`);
+				buff.push(`${e.domain}`);
 				arr.push(buff);
 			}
 
@@ -2759,7 +2841,9 @@ export class ListMaker {
 					(page.status === Status.Todo ||
 						page.status === Status.Maybe ||
 						page.status === Status.Standby) &&
-					(page.type === Types.Task || page.type === Types.Praxis),
+					(page.type === Types.Task ||
+						page.type === Types.Praxis ||
+						page.type === Types.Media),
 			);
 
 		const buff = [];
@@ -2801,6 +2885,7 @@ export class ListMaker {
 					estimate: fm.timeEstimate,
 					project: project,
 					area: area,
+					domain: Helper.getField(Helper.getDomain(fm, true), ""),
 					path: task.file.path,
 					logPath: log.file.path,
 				};
@@ -2884,7 +2969,8 @@ export class ListMaker {
 				buff.push(`${convertSecondsToHours(e.tookAcc)}`);
 				buff.push(`${convertSecondsToHours(e.deltaAcc)}`);
 				buff.push(`${e.project}`);
-				buff.push(`${e.area}`);
+				// buff.push(`${e.area}`);
+				buff.push(`${e.domain}`);
 
 				arr.push(buff);
 				totalTime += e.took;
@@ -3012,7 +3098,7 @@ export class ListMaker {
 					project = "";
 				}
 				buff.push(project);
-				let area = Helper.getArea(fm, true);
+				let area = Helper.getDomain(fm, true);
 				if (area === undefined) {
 					area = "";
 				}
@@ -3097,6 +3183,18 @@ export class ListMaker {
 				}
 
 				if (p.reviewed !== undefined && p.reviewed >= 1) {
+					return false;
+				}
+
+				const pages = this.dv
+					.pages(`"${Paths.Tasks}/${f.frontmatter.parent_id}"`)
+					.array();
+				if (pages.length !== 1) {
+					return false;
+				}
+
+				const parent = pages[0];
+				if (parent.type !== Types.Media) {
 					return false;
 				}
 
