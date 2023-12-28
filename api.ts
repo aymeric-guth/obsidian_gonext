@@ -317,7 +317,7 @@ export const AutoField = {
 	},
 
 	revisions(dv, entries) {
-		const current = dv.current()
+		const current = dv.current();
 		const cols = ["", "created_at", "uuid"];
 		const buff = [];
 		for (const entry of entries) {
@@ -371,7 +371,13 @@ export const AutoField = {
 	revisionsList(dv, root: string) {
 		let head = dv.current();
 		while (true) {
-			const pages = dv.pages(`"${root}"`).where((page) => page.file.frontmatter.next === head.file.frontmatter.uuid);
+			const pages = dv
+				.pages(`"${root}"`)
+				.where(
+					(page) =>
+						page.file.frontmatter.next ===
+						head.file.frontmatter.uuid,
+				);
 			if (pages.length > 1) {
 				throw new Error();
 			} else if (pages.length === 0) {
@@ -388,7 +394,7 @@ export const AutoField = {
 			if (fm.next === undefined) {
 				break;
 			}
-			const pages = dv.pages(`"${Paths.Slipbox}/${fm.next}"`);
+			const pages = dv.pages(`"${root}/${fm.next}"`);
 			if (pages.length === 0) {
 				break;
 			}
@@ -401,7 +407,7 @@ export const AutoField = {
 	permanent(dv) {
 		const buff = AutoField.revisionsList(dv, Paths.Slipbox);
 		AutoField.tags(dv, dv.current().file.frontmatter);
-		AutoField.revisions(dv, buff);
+		AutoField.revisions(dv, buff.reverse());
 	},
 
 	resource(dv) {
@@ -1299,6 +1305,64 @@ export class NoteHelper {
 
 		return children;
 	}
+
+	isLastRevision(page): boolean {
+		const revisionList = (dv, root: string, current) => {
+			let head = current;
+			while (true) {
+				const pages = dv
+					.pages(`"${root}"`)
+					.where(
+						(page) =>
+							page.file.frontmatter.next ===
+							head.file.frontmatter.uuid,
+					);
+				if (pages.length > 1) {
+					throw new Error();
+				} else if (pages.length === 0) {
+					break;
+				}
+				head = pages[0];
+			}
+
+			const buff = [];
+			let cur = head;
+			while (true) {
+				buff.push(cur);
+				const fm = cur.file.frontmatter;
+				if (fm.next === undefined) {
+					break;
+				}
+				const pages = dv.pages(`"${root}/${fm.next}"`);
+				if (pages.length === 0) {
+					break;
+				}
+				cur = pages[0];
+			}
+
+			return buff;
+		};
+
+		const note = page;
+		const fm = note.file.frontmatter;
+		let revisions = [];
+		switch (fm.type) {
+			case Types.Permanent:
+				revisions = revisionList(this.dv, Paths.Slipbox, note);
+				break;
+			case Types.Resource:
+				revisions = revisionList(this.dv, Paths.Resources, note);
+				break;
+			default:
+				throw new Error();
+		}
+
+		if (revisions.length <= 1) {
+			return true;
+		}
+
+		return revisions[0].file.frontmatter.uuid === fm.uuid;
+	}
 }
 
 export class ListMaker {
@@ -1700,9 +1764,6 @@ export class ListMaker {
 					comp.push(t);
 				}
 			}
-			if (comp.length < components.length) {
-				continue;
-			}
 
 			let missing = 0;
 			for (const component of components) {
@@ -1710,6 +1771,9 @@ export class ListMaker {
 					missing += 1;
 				}
 			}
+			console.log(fm);
+			console.log(`missing: ${missing}`);
+			console.log(`components.length: ${components.length}`);
 			if (components.length - missing < minMatchingComponent) {
 				continue;
 			}
@@ -1773,6 +1837,12 @@ export class ListMaker {
 
 			if (!found) {
 				continue;
+			}
+
+			if (fm.type === 7 || fm.type === 2) {
+				if (!this.noteHelper.isLastRevision(page)) {
+					continue;
+				}
 			}
 
 			rs[Types[fm.type]].push(page);
@@ -2083,7 +2153,7 @@ export class ListMaker {
 					}
 				}
 			}
-		} else {
+		} else if (groupBy === "component") {
 			const buff = {};
 			for (const domain of Object.keys(bins)) {
 				for (const component of Object.keys(bins[domain])) {
@@ -2128,6 +2198,55 @@ export class ListMaker {
 					}
 				}
 			}
+		} else {
+			const ontologyMap = {};
+			const pages = {};
+			for (const domain of Object.keys(bins)) {
+				for (const component of Object.keys(bins[domain])) {
+					for (const task of bins[domain][component]) {
+						if (task.file.frontmatter.uuid === undefined) {
+							continue;
+						} else if (pages[task.file.frontmatter.uuid] !== undefined) {
+							continue;
+						}
+						pages[task.file.frontmatter.uuid] = task;
+					}
+				}
+			}
+			for (const uuid of Object.keys(pages)) {
+				const page = pages[uuid];
+				const fm = page.file.frontmatter;
+				const domain = Helper.getDomain(fm);
+				const components = [];
+				for (const tag of fm.tags) {
+					if (tag.length > 10 && tag.slice(0, 10) === "component/") {
+						components.push(tag);
+					}
+				}
+				let s = ""
+				s += `${domain}\n`;
+				components.sort();
+				for (const component of components) {
+					s += `${component}\n`;
+				}
+				const key = s;
+				if (ontologyMap[key] === undefined) {
+					ontologyMap[key] = [page];
+				} else {
+					ontologyMap[key].push(page);
+				}
+			}
+
+			const keys = Object.keys(ontologyMap)
+			keys.sort((a, b) => ontologyMap[a].length - ontologyMap[b].length);
+			for (const key of keys.reverse()) {
+				rs.push(["header", 2, key]);
+				for (const page of ontologyMap[key]) {
+					rs.push(["paragraph", Renderer.makeLinkShortUUID(this.dv, page.file)]);
+				}
+			}
+
+			// const myuuid = crypto.randomUUID();
 		}
 
 		return rs;
