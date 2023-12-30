@@ -167,6 +167,16 @@ export const Helper = {
 		return defaultRetVal;
 	},
 
+	getComponents(fm) {
+		const components = [];
+		for (const tag of fm.tags) {
+			if (tag.length > 10 && tag.slice(0, 10) === "component/") {
+				components.push(tag);
+			}
+		}
+		return components;
+	},
+
 	getArea(fm, emptyDefault = false) {
 		return Helper.getTag(fm, "area", emptyDefault);
 	},
@@ -232,14 +242,14 @@ export const Helper = {
 };
 
 export const AutoField = {
-	tags(dv, fm) {
+	tags(dv, fm, level = 2) {
 		const tags = fm.tags;
 		if (tags == undefined || tags.length === 0) {
 			return;
 		}
 
 		tags.sort();
-		dv.header(3, "Tags");
+		dv.header(level, "Tags");
 		let s = "";
 		for (const tag of tags) {
 			s += ` #${tag}`;
@@ -359,7 +369,7 @@ export const AutoField = {
 		AutoField.title(dv, mediaFm);
 		dv.paragraph(Renderer.makeLinkAlias(dv, media.file));
 		AutoField.authors(dv, mediaFm);
-		AutoField.tags(dv, mediaFm);
+		AutoField.tags(dv, mediaFm, 3);
 
 		const logEntries = dv
 			.pages(`"${Paths.Logs}/${fm.uuid}"`)
@@ -405,15 +415,52 @@ export const AutoField = {
 	},
 
 	permanent(dv) {
-		const buff = AutoField.revisionsList(dv, Paths.Slipbox);
-		AutoField.tags(dv, dv.current().file.frontmatter);
-		AutoField.revisions(dv, buff.reverse());
+		const fm = dv.current().file.frontmatter;
+		const components = Helper.getComponents(fm);
+		const traits = [];
+		for (const component of components) {
+			if (
+				component.length > 16 &&
+				component.slice(0, 16) === "component/trait/"
+			) {
+				traits.push(component.slice(16));
+			}
+		}
+
+		if (traits.length === 0) {
+			AutoField.tags(dv, fm, 2);
+		} else {
+			if (traits.length > 1) {
+				throw new Error("Support for 1 trait only");
+			}
+
+			const trait = traits[0];
+			if (trait !== "revision") {
+				throw new Error(`Trait '${trait}' not implemented`);
+			}
+
+			const ontology = [];
+			for (const component of components) {
+				if (
+					component.length > 16 &&
+					component.slice(0, 16) === "component/trait/"
+				) {
+					continue;
+				}
+				ontology.push(`#${component}`);
+			}
+			ontology.push(`#${Helper.getDomain(fm)}`);
+			const pages = dv
+				.pages(ontology.join(" and "))
+				.where((page) => page.file.frontmatter.type === fm.type)
+				.sort((k) => k.created_at, "desc")
+				.array();
+			AutoField.revisions(dv, pages);
+		}
 	},
 
 	resource(dv) {
-		const buff = AutoField.revisionsList(dv, Paths.Resources);
-		AutoField.tags(dv, dv.current().file.frontmatter);
-		AutoField.revisions(dv, buff);
+		return AutoField.permanent(dv);
 	},
 };
 
@@ -2138,42 +2185,73 @@ export class ListMaker {
 
 				rs.push(["header", 2, domain.slice(7)]);
 				rs.push(["paragraph", `#${domain}`]);
-				const components = Object.keys(bins[domain]);
-				components.sort();
+				const componentsNamespace = Object.keys(bins[domain]);
+				componentsNamespace.sort();
+				const components = {};
+				for (const componentNamespace of componentsNamespace) {
+					let fragment = "";
+					const s = componentNamespace.split("/");
+					const component = s[1];
+					if (s.length === 3) {
+						fragment = s[2];
+					}
+					if (components[component] === undefined) {
+						components[component] = [fragment];
+					} else {
+						components[component].push(fragment);
+					}
+				}
 
-				for (const component of components) {
+				const cmp = Object.keys(components);
+				cmp.sort();
+
+				for (const component of cmp) {
+					const fragments = components[component];
+					fragments.sort();
 					if (
 						allComponents.length > 0 &&
-						!allComponents.contains(component)
+						!allComponents.contains(`component/${component}`)
 					) {
 						continue;
 					}
+					rs.push(["header", 3, component]);
+					rs.push(["paragraph", `#component/${component}`]);
 
-					rs.push(["header", 3, component.slice(10)]);
-					rs.push(["paragraph", `#${component}`]);
-					const tasks = bins[domain][component];
-
-					for (const task of tasks) {
-						// rs.push([
-						// 	"paragraph",
-						// 	Renderer.makeLinkAlias(this.dv, task.file, "Content"),
-						// ]);
+					if (fragments.length > 1) {
+						for (const fragment of fragments) {
+							// rs.push(["header", 4, fragment]);
+							rs.push([
+								"paragraph",
+								`#component/${component}/${fragment}`,
+							]);
+						}
 					}
 				}
 			}
 		} else if (groupBy === "component") {
 			const buff = {};
 			for (const domain of Object.keys(bins)) {
-				for (const component of Object.keys(bins[domain])) {
-					// .split()
+				for (const componentNamespace of Object.keys(bins[domain])) {
+					let fragment = "";
+					const s = componentNamespace.split("/");
+					const component = s[1];
+					if (s.length === 3) {
+						fragment = s[2];
+					}
+
 					if (buff[component] === undefined) {
 						buff[component] = {};
 					}
-					if (buff[component][domain] === undefined) {
-						buff[component][domain] = [...bins[domain][component]];
+					if (buff[component][fragment] === undefined) {
+						buff[component][fragment] = {};
+					}
+					if (buff[component][fragment][domain] === undefined) {
+						buff[component][fragment][domain] = [
+							...bins[domain][componentNamespace],
+						];
 					} else {
-						for (const task of bins[domain][component]) {
-							buff[component][domain].push(task);
+						for (const task of bins[domain][componentNamespace]) {
+							buff[component][fragment][domain].push(task);
 						}
 					}
 				}
@@ -2182,28 +2260,39 @@ export class ListMaker {
 			const components = Object.keys(buff);
 			components.sort();
 			for (const component of components) {
-				rs.push(["header", 2, component.slice(10)]);
-				rs.push(["paragraph", `#${component}`]);
-				const domains = Object.keys(buff[component]);
-				domains.sort();
+				rs.push(["header", 2, component]);
+				rs.push(["paragraph", `#component/${component}`]);
+				const fragments = Object.keys(buff[component]);
+				fragments.sort();
 
-				for (const domain of domains) {
-					// if (
-					// 	allDomains.length > 0 &&
-					// 	!allDomains.contains(domain)
-					// ) {
-					// 	continue;
-					// }
-
-					rs.push(["header", 3, domain.slice(7)]);
-					rs.push(["paragraph", `#${domain}`]);
-					const tasks = buff[component][domain];
-
-					for (const task of tasks) {
+				for (const fragment of fragments) {
+					if (fragment !== "") {
 						rs.push([
 							"paragraph",
-							this.dv.fileLink(task.file.path),
+							`#component/${component}/${fragment}`,
 						]);
+					}
+
+					const domains = Object.keys(buff[component][fragment]);
+					domains.sort();
+					for (const domain of domains) {
+						// if (
+						// 	allDomains.length > 0 &&
+						// 	!allDomains.contains(domain)
+						// ) {
+						// 	continue;
+						// }
+
+						rs.push(["header", 3, domain.slice(7)]);
+						rs.push(["paragraph", `#${domain}`]);
+						const tasks = buff[component][fragment][domain];
+
+						for (const task of tasks) {
+							rs.push([
+								"paragraph",
+								this.dv.fileLink(task.file.path),
+							]);
+						}
 					}
 				}
 			}
@@ -2215,7 +2304,9 @@ export class ListMaker {
 					for (const task of bins[domain][component]) {
 						if (task.file.frontmatter.uuid === undefined) {
 							continue;
-						} else if (pages[task.file.frontmatter.uuid] !== undefined) {
+						} else if (
+							pages[task.file.frontmatter.uuid] !== undefined
+						) {
 							continue;
 						}
 						pages[task.file.frontmatter.uuid] = task;
@@ -2232,7 +2323,7 @@ export class ListMaker {
 						components.push(tag);
 					}
 				}
-				let s = ""
+				let s = "";
 				s += `${domain}\n`;
 				components.sort();
 				for (const component of components) {
@@ -2246,12 +2337,15 @@ export class ListMaker {
 				}
 			}
 
-			const keys = Object.keys(ontologyMap)
+			const keys = Object.keys(ontologyMap);
 			keys.sort((a, b) => ontologyMap[a].length - ontologyMap[b].length);
 			for (const key of keys.reverse()) {
 				rs.push(["header", 2, key]);
 				for (const page of ontologyMap[key]) {
-					rs.push(["paragraph", Renderer.makeLinkShortUUID(this.dv, page.file)]);
+					rs.push([
+						"paragraph",
+						Renderer.makeLinkShortUUID(this.dv, page.file),
+					]);
 				}
 			}
 
