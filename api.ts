@@ -2502,21 +2502,21 @@ export class ListMaker {
     return rs;
   }
 
-  projectLogsAdhoc() {
+  projectLogsSheet(dv) {
+    const project = this.frontmatter.projectParseMeta(dv);
     const fml = this.frontmatter.getCurrentFrontmatter();
     if (fml === undefined) {
       throw new Error(`Invalid frontmatter, cannot proceed`);
     }
-    const filterBy = this.frontmatter.parseListFilterBy(fml);
 
+    const filterBy = this.frontmatter.parseListFilterBy(fml);
     const rs = [];
-    rs.push(["header", 1, "AdHoc"]);
+    rs.push(["header", 1, project.name]);
 
     const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
       if (page.type !== Types.Log) {
         return false;
       }
-
       return true;
     });
 
@@ -2539,100 +2539,12 @@ export class ListMaker {
         parent.length === 1,
         `Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
       );
-      fm.project = Helper.getProject(parent[0].file.frontmatter, true);
+      fm.project = Helper.getProject(parent[0].file.frontmatter);
       fm.area = Helper.getArea(parent[0].file.frontmatter, true);
-      if (fm.project !== undefined) {
+      if (fm.project !== `project/${project.name === "adhoc" ? "none" : project.name}`) {
         continue;
       }
 
-      if (Helper.nilCheck(fm.done_at)) {
-        continue;
-      }
-
-      const date = fm.done_at.slice(0, 10);
-      if (buff[date] === undefined) {
-        buff[date] = [e];
-      } else {
-        buff[date].push(e);
-      }
-    }
-
-    const keys = Object.keys(buff);
-    keys.sort();
-    for (const date of keys) {
-      buff[date].sort(
-        (a, b) =>
-          b.file.frontmatter.createdAt.getTime() -
-          a.file.frontmatter.createdAt.getTime(),
-      );
-    }
-
-    for (const date of keys.reverse()) {
-      rs.push(["header", 3, date]);
-      rs.push(["array", Renderer.projectLogs, buff[date]]);
-    }
-
-    return rs;
-  }
-
-  projectLogs() {
-    const fml = this.frontmatter.getCurrentFrontmatter();
-    if (fml === undefined) {
-      throw new Error(`Invalid frontmatter, cannot proceed`);
-    }
-    const project = Helper.getProject(fml).slice(8);
-    const filterBy = this.frontmatter.parseListFilterBy(fml);
-
-    const rs = [];
-    rs.push(["header", 1, project]);
-
-    const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
-      if (page.type !== Types.Log) {
-        return false;
-      }
-
-      // const f = p.file;
-      // const createdAt = this.frontmatter.getCreatedAt(f);
-      // const now = new Date();
-      // if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
-      // 	return false;
-      // }
-      //
-      // if (p.reviewed !== undefined && p.reviewed >= 1) {
-      // 	return false;
-      // }
-
-      return true;
-    });
-
-    const buff = {};
-    for (const e of logs) {
-      const fm = e.file.frontmatter;
-      if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
-        continue;
-      }
-
-      fm.createdAt = this.frontmatter.getCreatedAt(e.file);
-      Assert.True(
-        !Helper.nilCheck(fm.parent_id),
-        `Missing field "parent_id" from log: "${fm.uuid}"`,
-      );
-      const parent = this.dv
-        .pages(`"${Paths.Tasks}/${fm.parent_id}"`)
-        .array();
-      Assert.True(
-        parent.length === 1,
-        `Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
-      );
-      fm.project = Helper.getProject(parent[0].file.frontmatter, true);
-      fm.area = Helper.getArea(parent[0].file.frontmatter, true);
-      if (fm.project !== `project/${project}`) {
-        continue;
-      }
-
-      // if (fm.reviewed !== undefined && fm.reviewed > 0) {
-      // 	continue;
-      // }
       if (Helper.nilCheck(fm.done_at)) {
         continue;
       }
