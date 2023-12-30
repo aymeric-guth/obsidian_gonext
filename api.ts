@@ -1541,7 +1541,11 @@ export class ListMaker {
 
 		const components = curFm.components;
 		const domains = curFm.domains;
-		const noteTypes = curFm.types;
+		let noteTypes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+		if (!Helper.nilCheck(curFm.types) && curFm.types !== "*") {
+			noteTypes = curFm.types;
+		}
+		console.log(noteTypes);
 		const dropTasks = curFm.drop_status;
 		const minMatchingComponent = components.length;
 
@@ -1708,7 +1712,10 @@ export class ListMaker {
 			}
 		}
 
-		const noteTypes = curFm.types;
+		let noteTypes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+		if (!Helper.nilCheck(curFm.types) && curFm.types !== "*") {
+			noteTypes = curFm.types;
+		}
 		const dropTasks = Helper.nilCheck(curFm.drop_status)
 			? []
 			: curFm.drop_status;
@@ -1771,9 +1778,6 @@ export class ListMaker {
 					missing += 1;
 				}
 			}
-			console.log(fm);
-			console.log(`missing: ${missing}`);
-			console.log(`components.length: ${components.length}`);
 			if (components.length - missing < minMatchingComponent) {
 				continue;
 			}
@@ -2079,6 +2083,10 @@ export class ListMaker {
 				throw new Error(`Invalid Node: ${n.file.path}`);
 			}
 
+			if (!allDomains.contains(domain)) {
+				continue;
+			}
+
 			const components = [];
 
 			let isContent = false;
@@ -2157,6 +2165,7 @@ export class ListMaker {
 			const buff = {};
 			for (const domain of Object.keys(bins)) {
 				for (const component of Object.keys(bins[domain])) {
+					// .split()
 					if (buff[component] === undefined) {
 						buff[component] = {};
 					}
