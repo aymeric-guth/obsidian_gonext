@@ -689,25 +689,54 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
+	domainBase(dv, data) {
+		if (data === Helper.getDomain({})) {
+			return "\\-";
+		} else {
+			return `#${data}`;
+		}
+	},
 	componentsBase(dv, data) {
 		if (data.length === 0) {
 			return "\\-";
 		} else {
-			return data.join("\n");
+			const buff = [];
+			for (const d of data) {
+				buff.push(`#${d}`);
+			}
+			return buff.join("<br>");
 		}
 	},
 
-	knowledgeBase(dv, data) {
-		// const cols = ["uuid", "domain", "components"];
-		const cols = ["uuid"];
+	ontologyBase(dv, fm) {
+		const buff = [`#${Helper.getDomain(fm)}`];
+		const components = Helper.getComponents(fm);
+		components.sort();
+		for (const component of components) {
+			buff.push(`#${component}`);
+		}
+		return buff.join("<br>");
+	},
+
+	knowledgeFull(dv, data) {
+		const cols = ["uuid", "ontology"];
 		const buff = [];
 		for (const d of data) {
 			const f = d.file;
 			const fm = d.file.frontmatter;
-			buff.push([Renderer.makeLinkAlias(dv, f)]);
+			buff.push([
+				Renderer.makeLinkAlias(dv, f),
+				Renderer.ontologyBase(dv, fm),
+			]);
 		}
 
 		dv.table(cols, buff);
+	},
+
+	knowledgeBase(dv, data) {
+		for (const d of data) {
+			dv.paragraph(Renderer.makeLinkAlias(dv, d.file));
+		}
 	},
 
 	resourceBase(dv, data) {
@@ -2259,21 +2288,23 @@ export class ListMaker {
 
 					if (fragments.length > 1) {
 						for (const fragment of fragments) {
-							rs.push([
-								"paragraph",
-								`#component/${component}/${fragment}`,
-							]);
-							const tasks =
-								bins[domain][
-								`component/${component}/${fragment}`
-								];
+							const key = `component/${component}${fragment === "" ? "" : "/" + fragment
+								}`;
+							rs.push(["paragraph", `#${key}`]);
+							const tasks = bins[domain][key];
 							if (tasks !== undefined) {
 								rs.push([
 									"array",
-									Renderer.knowledgeBase,
+									Renderer.knowledgeFull,
 									tasks,
 								]);
 							}
+						}
+					} else {
+						const key = `component/${component}`;
+						const tasks = bins[domain][key];
+						if (tasks !== undefined) {
+							rs.push(["array", Renderer.knowledgeFull, tasks]);
 						}
 					}
 				}
