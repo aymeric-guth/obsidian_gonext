@@ -3300,10 +3300,10 @@ export class ListMaker {
 					return false;
 				}
 
-				const parent = pages[0];
-				if (parent.type !== Types.Media) {
-					return false;
-				}
+				// const parent = pages[0];
+				// if (parent.type !== Types.Media) {
+				// 	return false;
+				// }
 
 				return true;
 			});
