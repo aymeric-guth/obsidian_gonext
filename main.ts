@@ -1,4 +1,11 @@
-import { Plugin, Workspace, HTMLElement, MarkdownView } from "obsidian";
+import {
+	App,
+	Modal,
+	Plugin,
+	Workspace,
+	HTMLElement,
+	MarkdownView,
+} from "obsidian";
 import {
 	Helper,
 	Frontmatter,
@@ -196,6 +203,14 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "display-modal",
+			name: "Display modal",
+			callback: () => {
+				new ExampleModal(this.app).open();
+			},
+		});
+
+		this.addCommand({
 			id: "go-parent",
 			name: "Go Parent",
 			editorCallback: (editor: Editor, view: MarkdownView) => {
@@ -253,5 +268,28 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+}
+
+export class ExampleModal extends Modal {
+	constructor(app: App) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		const dv = this.app.plugins.plugins.dataview.api;
+		const tasks = dv.pages().array().slice(0, 10);
+		let s = "";
+		for (const task of tasks) {
+			s += `${task.file.path}\n\n`
+
+		}
+		contentEl.setText(s);
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
 	}
 }
