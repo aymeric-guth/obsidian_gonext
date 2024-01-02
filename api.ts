@@ -904,6 +904,48 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
+	basicTaskJournal(dv, data) {
+		const buff = [];
+		const cols = ["journal", "uuid", "tasks", "estimate",];
+		const journal = dv.pages(`"${Paths.Journal}"`).array()[0].file
+			.frontmatter.tasks;
+
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			const domain =
+				Helper.getDomain(fm, true) === undefined
+					? "\\-"
+					: Helper.getDomain(fm);
+
+			if (fm.ref_id === undefined) {
+				// console.log(`name: ${d.file.path}`)
+				// console.log(`tasks: ${d.file.tasks.length}`)
+				// console.log(`tasksB: ${f.tasks.length}`)
+				buff.push([
+					journal.contains(fm.uuid) ? "->" : "\\-",
+					dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+					dv.markdownTaskList(f.tasks),
+					fm.time_estimate,
+				]);
+			} else {
+				const ref = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+				if (ref.length === 0) {
+					throw new Error(
+						`task: '${fm.uuid}' has an undefined ref_id: '${fm.ref_id}'`,
+					);
+				} else {
+					buff.push([
+						dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+						Renderer.makeLinkAlias(dv, ref[0].file),
+						fm.time_estimate,
+						domain,
+					]);
+				}
+			}
+		}
+		dv.table(cols, buff);
+	},
 	basicTask(dv, data) {
 		const buff = [];
 		const cols = ["uuid", "tasks", "estimate", "domain"];
@@ -2505,7 +2547,7 @@ export class ListMaker {
 						b.file.frontmatter.priority) *
 					-1,
 			);
-			rs.push(["array", Renderer.basicTask, bins.doable]);
+			rs.push(["array", Renderer.basicTaskJournal, bins.doable]);
 		}
 
 		if (bins.waiting.length > 0) {
