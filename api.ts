@@ -169,6 +169,9 @@ export const Helper = {
 
 	getComponents(fm) {
 		const components = [];
+		if (Helper.nilCheck(fm.tags)) {
+			return [];
+		}
 		for (const tag of fm.tags) {
 			if (tag.length > 10 && tag.slice(0, 10) === "component/") {
 				components.push(tag);
@@ -567,7 +570,7 @@ export const Renderer = {
 	},
 
 	inboxEntry(dv, data) {
-		const cols = ["uuid", "type", "age", "size", "project", "domain"];
+		const cols = ["uuid", "type", "age", "size", "project", "domain", "components"];
 		const buff = [];
 		for (const d of data) {
 			const f = d.file;
@@ -590,7 +593,8 @@ export const Renderer = {
 				since: `${since}`,
 				size: f.size,
 				project: fm.project === undefined ? "\\-" : fm.project,
-				domain: fm.domain === undefined ? "\\-" : fm.domain,
+				domain: fm.domain === undefined ? "\\-" : Renderer.domainBase(dv, fm.domain),
+				components: Helper.getComponents(fm),
 			};
 
 			if (record.type === "log") {
@@ -626,6 +630,7 @@ export const Renderer = {
 				record.size,
 				record.project,
 				record.domain,
+				Renderer.componentsBase(dv, record.components),
 			]);
 		}
 
@@ -3325,7 +3330,6 @@ export class ListMaker {
 			this.frontmatter.parseInbox();
 		const rs = [];
 		const buff = [];
-		const bins = {};
 		// fonction d'extraction et d'initialisation des paramrtres du frontmatter
 		// fonction filter, (task) -> bool
 
@@ -3451,62 +3455,13 @@ export class ListMaker {
 				);
 			}
 		};
+
 		const sortByAge = (a, b) =>
 			a.file.frontmatter.createdAt.getTime() -
 			b.file.frontmatter.createdAt.getTime();
 
-		const sortBy = sortByAge;
-
-		if (groupBy == "area") {
-			for (const e of buff) {
-				const area = e.file.frontmatter.area;
-				if (bins[area] === undefined) {
-					bins[area] = [e];
-				} else {
-					bins[area].push(e);
-				}
-			}
-			const keys = Object.keys(bins);
-			keys.sort();
-			for (const area of keys) {
-				bins[area].sort(sortBy);
-			}
-			for (const area of keys) {
-				rs.push([
-					"header",
-					2,
-					area === "undefined" ? "area/none" : area,
-				]);
-				rs.push(["array", Renderer.inboxEntry, bins[area]]);
-			}
-		} else if (groupBy == "project") {
-			for (const e of buff) {
-				const project = e.file.frontmatter.project;
-				if (bins[project] === undefined) {
-					bins[project] = [e];
-				} else {
-					bins[project].push(e);
-				}
-			}
-			const keys = Object.keys(bins);
-			keys.sort();
-
-			for (const project of keys) {
-				bins[project].sort(sortBy);
-			}
-
-			for (const project of keys) {
-				rs.push([
-					"header",
-					2,
-					project === "undefined" ? "project/none" : project,
-				]);
-				rs.push(["array", Renderer.inboxEntry, bins[project]]);
-			}
-		} else {
-			buff.sort(sortBy);
-			rs.push(["array", Renderer.inboxEntry, buff]);
-		}
+		buff.sort(sortByAge);
+		rs.push(["array", Renderer.inboxEntry, buff]);
 
 		return rs;
 	}
