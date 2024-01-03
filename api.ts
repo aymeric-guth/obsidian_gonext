@@ -567,7 +567,7 @@ export const Renderer = {
 	},
 
 	inboxEntry(dv, data) {
-		const cols = ["uuid", "type", "age", "size", "project", "area"];
+		const cols = ["uuid", "type", "age", "size", "project", "domain"];
 		const buff = [];
 		for (const d of data) {
 			const f = d.file;
@@ -2538,6 +2538,19 @@ export class ListMaker {
 			}
 		}
 
+		{
+			let toReview = 0;
+			const logs = this.getProjectLogs(dv, project);
+			for (const log of logs) {
+				if (log.file.frontmatter.reviewed < 1) {
+					toReview += 1;
+				}
+			}
+			rs.push(["header", 2, `Pending Logs (${toReview})`]);
+			if (toReview > 0) {
+				rs.push(["paragraph", `[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name}/logs]]`]);
+			}
+		}
 		// groupBy layer, ??
 		if (bins.doable.length > 0) {
 			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
@@ -2607,6 +2620,45 @@ export class ListMaker {
 		}
 
 		return rs;
+	}
+
+	getProjectLogs(dv, project) {
+		const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
+			if (page.type !== Types.Log) {
+				return false;
+			}
+			return true;
+		});
+
+		const buff = [];
+		for (const e of logs) {
+			const fm = e.file.frontmatter;
+			Assert.True(
+				!Helper.nilCheck(fm.parent_id),
+				`Missing field "parent_id" from log: "${fm.uuid}"`,
+			);
+			const parent = this.dv
+				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
+				.array();
+			Assert.True(
+				parent.length === 1,
+				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
+			);
+			fm.project = Helper.getProject(parent[0].file.frontmatter);
+			fm.area = Helper.getArea(parent[0].file.frontmatter, true);
+			if (
+				fm.project !==
+				`project/${project.name === "adhoc" ? "none" : project.name}`
+			) {
+				continue;
+			}
+
+			if (Helper.nilCheck(fm.done_at)) {
+				continue;
+			}
+			buff.push(e);
+		}
+		return buff;
 	}
 
 	projectLogsSheet(dv) {
@@ -3306,7 +3358,7 @@ export class ListMaker {
 					e.file,
 				);
 				fm.project = Helper.getProject(fm, true);
-				fm.area = Helper.getArea(fm, true);
+				fm.domain = Helper.getDomain(fm, true);
 				if (e.file.size < minSize) {
 					continue;
 				}
