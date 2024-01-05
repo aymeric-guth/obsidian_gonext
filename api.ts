@@ -570,7 +570,15 @@ export const Renderer = {
 	},
 
 	inboxEntry(dv, data) {
-		const cols = ["uuid", "type", "age", "size", "project", "domain", "components"];
+		const cols = [
+			"uuid",
+			"type",
+			"age",
+			"size",
+			"project",
+			"domain",
+			"components",
+		];
 		const buff = [];
 		for (const d of data) {
 			const f = d.file;
@@ -593,7 +601,10 @@ export const Renderer = {
 				since: `${since}`,
 				size: f.size,
 				project: fm.project === undefined ? "\\-" : fm.project,
-				domain: fm.domain === undefined ? "\\-" : Renderer.domainBase(dv, fm.domain),
+				domain:
+					fm.domain === undefined
+						? "\\-"
+						: Renderer.domainBase(dv, fm.domain),
 				components: Helper.getComponents(fm),
 			};
 
@@ -911,7 +922,7 @@ export const Renderer = {
 
 	basicTaskJournal(dv, data) {
 		const buff = [];
-		const cols = ["journal", "uuid", "tasks", "estimate",];
+		const cols = ["journal", "uuid", "tasks", "estimate"];
 		const journal = dv.pages(`"${Paths.Journal}"`).array()[0].file
 			.frontmatter.tasks;
 
@@ -951,6 +962,30 @@ export const Renderer = {
 		}
 		dv.table(cols, buff);
 	},
+	activeTask(dv, data) {
+		const buff = [];
+		const cols = ["uuid", "tasks", "session"];
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			const logs = dv
+				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((p) => p.type === 6)
+				.sort((k) => k.created_at, "desc");
+			const last = logs[0];
+			const createdAt = new Date(last.created_at);
+			const now = new Date();
+			buff.push([
+				dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+				dv.markdownTaskList(f.tasks),
+				((t) => {
+					return Math.round((t / (3600 * 1000)) * 10) / 10;
+				})(now.getTime()-createdAt.getTime()),
+			]);
+		}
+		dv.table(cols, buff);
+	},
+
 	basicTask(dv, data) {
 		const buff = [];
 		const cols = ["uuid", "tasks", "estimate", "domain"];
@@ -2553,7 +2588,11 @@ export class ListMaker {
 			}
 			rs.push(["header", 2, `Pending Logs (${toReview})`]);
 			if (toReview > 0) {
-				rs.push(["paragraph", `[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name}/logs]]`]);
+				rs.push([
+					"paragraph",
+					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
+					}/logs]]`,
+				]);
 			}
 		}
 		// groupBy layer, ??
@@ -3598,7 +3637,7 @@ export class ListMaker {
 
 		if (doing.length > 0) {
 			arr.push(["header", 2, `Active (${doing.length})`]);
-			arr.push(["array", Renderer.basicTask, doing]);
+			arr.push(["array", Renderer.activeTask, doing]);
 		}
 
 		if (bins.doable.length > 0) {
