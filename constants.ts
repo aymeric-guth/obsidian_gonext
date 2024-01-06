@@ -21,7 +21,7 @@ export const Status = {
 };
 
 export const Types = {
-	Fleeting: 0,
+	Fleeting: 13,
 	Literature: 1,
 	Permanent: 2,
 	Task: 3,
@@ -30,6 +30,10 @@ export const Types = {
 	Log: 6,
 	Resource: 7,
 	Media: 8,
+	Project: 12,
+	Org: 9,
+	Domain: 10,
+	Component: 11,
 };
 
 export const Namespace = {

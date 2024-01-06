@@ -1,4 +1,5 @@
 import { group } from "console";
+import { unzip } from "zlib";
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
 class ValidationError extends Error {
@@ -980,7 +981,7 @@ export const Renderer = {
 				dv.markdownTaskList(f.tasks),
 				((t) => {
 					return Math.round((t / (3600 * 1000)) * 10) / 10;
-				})(now.getTime()-createdAt.getTime()),
+				})(now.getTime() - createdAt.getTime()),
 			]);
 		}
 		dv.table(cols, buff);
@@ -1123,6 +1124,47 @@ export const Renderer = {
 				fm.time_estimate,
 				`${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10}h`,
 				domain,
+			]);
+		}
+
+		dv.table(cols, buff);
+	},
+
+	taskDoneWithLogs(dv, data) {
+		const buff = [];
+		const cols = [
+			"taskId",
+			"logId",
+			"createdAt",
+			"doneAt",
+			"timeEstimate",
+			"took",
+			"project",
+		];
+		for (const d of data) {
+			const f = d.file;
+			const fm = d.file.frontmatter;
+			const createdAt = new Date(fm.created_at);
+			const doneAt = new Date(fm.done_at);
+			const timeEstimate = "";
+			const took = (doneAt - createdAt) / (1000 * 3600);
+			const pages = dv.pages(`"${Paths.Tasks}"`).where(page => page.file.frontmatter.uuid === fm.parent_id);
+			if (pages.length !== 1) {
+				throw new Error();
+			}
+			const parent = pages[0];
+			const parentFm = parent.file.frontmatter;
+			const parentF = parent.file;
+			buff.push([
+				Renderer.makeLinkShortUUID(dv, parent.file, "Task"),
+				Renderer.makeLinkShortUUID(dv, f),
+				createdAt.toISOString().slice(0, 10),
+				doneAt.toISOString().slice(0, 10),
+				timeEstimate,
+				((t) => {
+					return Math.round(t * 10) / 10;
+				})(took),
+				Helper.getProject(parentFm),
 			]);
 		}
 
@@ -1910,7 +1952,7 @@ export class ListMaker {
 			}
 		}
 
-		let noteTypes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+		let noteTypes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 		if (!Helper.nilCheck(curFm.types) && curFm.types !== "*") {
 			noteTypes = curFm.types;
 		}
@@ -1931,10 +1973,13 @@ export class ListMaker {
 			log: [],
 			resource: [],
 			media: [],
+			org: [],
+			domain: [],
+			component: [],
+			project: [],
 		};
 
 		const Types = {
-			0: "fleeting",
 			1: "literature",
 			2: "permanent",
 			3: "task",
@@ -1943,6 +1988,11 @@ export class ListMaker {
 			6: "log",
 			7: "resource",
 			8: "media",
+			9: "org",
+			10: "domain",
+			11: "component",
+			12: "project",
+			13: "fleeting",
 		};
 
 		const pages = this.dv.pages().where((page) => {
@@ -3231,6 +3281,56 @@ export class ListMaker {
 		return rs;
 	}
 
+	yesterday() {
+		const tasks = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((p) => p.status === Status.Done);
+		const rs = [];
+		const buff = [];
+		// lower bound (upper bound - 24h) | now | upper bound (lower bound - 24h)
+		// '2024-01-06T05:32:14.360Z'
+		const now = new Date();
+		const prev = new Date(now - 3600 * 1000 * 24);
+		prev.setHours(4);
+		prev.setMinutes(0);
+		prev.setSeconds(0);
+		prev.setMilliseconds(0);
+		const lowerBound = prev;
+		const upperBound = now;
+
+		for (const task of tasks) {
+			const fm = task.file.frontmatter;
+			const logs = this.dv
+				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((page) => {
+					const fml = page.file.frontmatter;
+					if (fml.done_at === undefined) {
+						return false;
+					}
+					const doneAt = new Date(fml.done_at);
+					// console.log(doneAt);
+					if (doneAt > lowerBound && doneAt < upperBound) {
+						return true;
+					}
+					return false;
+				})
+				.sort((k) => k.created_at, "asc");
+
+			if (logs.length < 1) {
+				continue;
+			}
+
+			for (const entry of logs) {
+				buff.push(entry);
+			}
+		}
+
+		rs.push(["header", 1, "Yesterday"]);
+		rs.push(["array", Renderer.taskDoneWithLogs, buff]);
+
+		return rs;
+	}
+
 	allDoneTasks() {
 		const [groupBy, filterBy, before, after] =
 			this.frontmatter.parseAllDoneTasks();
@@ -3327,8 +3427,12 @@ export class ListMaker {
 						`${fm.uuid.slice(0, 8)}`,
 					),
 				);
-				buff.push(`${fm.createdAt.toISOString().slice(0, 16)}`);
-				buff.push(`${fm.doneAt.toISOString().slice(0, 16)}`);
+				try {
+					buff.push(`${fm.createdAt.toISOString().slice(0, 16)}`);
+					buff.push(`${fm.doneAt.toISOString().slice(0, 16)}`);
+				} catch {
+					console.log(fm);
+				}
 				buff.push(`${fm.timeEstimate}`);
 				buff.push(`${fm.took}`);
 				let delta = 0;
