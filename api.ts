@@ -574,8 +574,8 @@ export const Renderer = {
 		const cols = [
 			"uuid",
 			"type",
-			"age",
-			"size",
+			// "age",
+			// "size",
 			"project",
 			"domain",
 			"components",
@@ -601,12 +601,19 @@ export const Renderer = {
 				type: Helper.numberTypeToString(fm.type),
 				since: `${since}`,
 				size: f.size,
-				project: fm.project === undefined ? "\\-" : fm.project,
+				project: fm.project === undefined ? "\\-" : fm.project.slice(8),
 				domain:
 					fm.domain === undefined
 						? "\\-"
-						: Renderer.domainBase(dv, fm.domain),
-				components: Helper.getComponents(fm),
+						: fm.domain.slice(7),//Renderer.domainBase(dv, fm.domain),
+				components: fm.components === [] ? "\\-" : (((components) => {
+					const buff = [];
+
+					for (const component of components) {
+						buff.push(component.slice(10))
+					}
+					return buff.join("\n");
+				})(Helper.getComponents(fm))),
 			};
 
 			if (record.type === "log") {
@@ -638,11 +645,11 @@ export const Renderer = {
 			buff.push([
 				record.uuid,
 				record.type,
-				record.since,
-				record.size,
+				// record.since,
+				// record.size,
 				record.project,
 				record.domain,
-				Renderer.componentsBase(dv, record.components),
+				record.components,
 			]);
 		}
 
