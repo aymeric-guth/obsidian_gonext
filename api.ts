@@ -573,7 +573,7 @@ export const Renderer = {
 	inboxEntry(dv, data) {
 		const cols = [
 			"uuid",
-			"type",
+			// "type",
 			// "age",
 			// "size",
 			"project",
@@ -597,7 +597,8 @@ export const Renderer = {
 			const delta = now.getTime() - fm.createdAt.getTime();
 			const since = Helper.msecToStringDuration(delta);
 			const record = {
-				uuid: Renderer.makeLinkAlias(dv, f),
+				uuid: Helper.numberTypeToString(fm.type) === "fleeting" ? `&#128196 ${Renderer.makeLinkAlias(dv, f)}` : Renderer.makeLinkAlias(dv, f),
+				// uuid: `&#9728 ${Renderer.makeLinkAlias(dv, f)}`,
 				type: Helper.numberTypeToString(fm.type),
 				since: `${since}`,
 				size: f.size,
@@ -606,13 +607,13 @@ export const Renderer = {
 					fm.domain === undefined
 						? "\\-"
 						: fm.domain.slice(7),//Renderer.domainBase(dv, fm.domain),
-				components: fm.components === [] ? "\\-" : (((components) => {
+				components: fm.components.length === 0 ? "\\-" : (((components) => {
 					const buff = [];
 
 					for (const component of components) {
 						buff.push(component.slice(10))
 					}
-					return buff.join("\n");
+					return buff.join("<br>");
 				})(Helper.getComponents(fm))),
 			};
 
@@ -626,12 +627,15 @@ export const Renderer = {
 				const parent = pages[0];
 				switch (parent.type) {
 					case Types.Task:
+						record.uuid = `&#128211 ${record.uuid}`
 						record.type = `<font color=8B0000>task</font>`;
 						break;
 					case Types.Praxis:
+						record.uuid = `&#128188 ${record.uuid}`
 						record.type = `<font color=FF8C00>praxis</font>`;
 						break;
 					case Types.Media:
+						record.uuid = `&#128191 ${record.uuid}`
 						record.type = `<font color=00008B>media</font>`;
 						break;
 					case Types.Provision:
@@ -644,7 +648,7 @@ export const Renderer = {
 
 			buff.push([
 				record.uuid,
-				record.type,
+				// record.type,
 				// record.since,
 				// record.size,
 				record.project,
@@ -3513,6 +3517,8 @@ export class ListMaker {
 				);
 				fm.project = Helper.getProject(fm, true);
 				fm.domain = Helper.getDomain(fm, true);
+				fm.components = Helper.getComponents(fm);
+
 				if (e.file.size < minSize) {
 					continue;
 				}
@@ -3581,7 +3587,9 @@ export class ListMaker {
 					parent[0].file.frontmatter,
 					true,
 				);
-				fm.area = Helper.getArea(parent[0].file.frontmatter, true);
+				fm.domain = undefined;
+				fm.components = [];
+
 				if (e.file.size < minSize) {
 					continue;
 				}
