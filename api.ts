@@ -499,6 +499,48 @@ export const AutoField = {
 		}
 	},
 
+	goal(dv) {
+		let current = dv.current();
+		let fm = current.file.frontmatter;
+		if (fm === undefined) {
+			console.warn("fm is required");
+			return;
+		}
+
+		// this.autoFieldNeed(dv, fm);
+		// this.autoFieldNeededBy(dv, current);
+		// this.autoFieldTags(dv, fm);
+		//
+		const logEntries = dv
+			.pages(`"${Paths.Logs}/${fm.uuid}"`)
+			.where((p) => p.type === 6)
+			.sort((k) => k.created_at, "desc");
+
+		const buff = [];
+		for (const entry of logEntries) {
+			const fme = entry.file.frontmatter;
+			const e = [];
+
+			if (fme === undefined || fme.created_at === undefined) {
+				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+			}
+
+			const start = new Date(fme.created_at);
+			e.push(start.toISOString().slice(0, 10));
+
+			e.push(
+				dv.sectionLink(fme.uuid, "## Content", false, fme.uuid.slice(0, 8)),
+			);
+
+			buff.push(e);
+		}
+
+		if (buff.length > 0) {
+			dv.header(2, "Logs");
+			dv.table(["created_at", "uuid"], buff);
+		}
+	},
+
 	resource(dv) {
 		return AutoField.permanent(dv);
 	},
@@ -3882,13 +3924,22 @@ export class ListMaker {
 			b.file.frontmatter.createdAt.getTime();
 
 		buff.sort(sortByAge);
-		const bufff = buff.filter((page) => {
+		const filterFunc = (page) => {
+			const fm = page.file.frontmatter;
 			return true;
-			return Helper.getDomain(page.file.frontmatter, true) === undefined
-				? true
-				: false;
-		});
-		rs.push(["array", Renderer.inboxEntry, bufff]);
+
+			if (Helper.getProject(fm, true) !== undefined) {
+				return false;
+			}
+
+			if (Helper.getDomain(fm, true) !== undefined) {
+				return false;
+			}
+
+			return true;
+		};
+
+		rs.push(["array", Renderer.inboxEntry, buff.filter(filterFunc)]);
 
 		return rs;
 	}
