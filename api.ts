@@ -1,6 +1,160 @@
-import { group } from "console";
+import { assert, group, time } from "console";
 import { unzip } from "zlib";
 import { Paths, Status, Types, Namespace, Default } from "./constants";
+
+class FrontmatterJS {
+	constructor(page) {
+		Assert.True(page !== undefined, "page is undefined");
+		const f = page.file;
+		Assert.True(f !== undefined, "f is undefined");
+		this.fm = f.frontmatter;
+		Assert.True(this.fm !== undefined, "fm is undefined");
+		Assert.True(this.fm.uuid !== undefined, "'uuid' is undefined");
+		console.log(`uuid: ${this.fm.uuid}`);
+		Assert.True(this.fm.version !== undefined, "'version' is undefined");
+		// Assert.True(fm.created_at !== undefined, "'created_at' is undefined");
+
+		this.uuid = this.fm.uuid;
+		this.version = this.fm.version;
+		this.createdAt = new Date(this.fm.created_at);
+		this.components = [];
+		this.domains = [];
+		this.projects = [];
+
+		const domains = [];
+		const components = [];
+		const projects = [];
+		const names = [];
+
+		if (!Helper.nilCheck(this.fm.tags)) {
+			if (!Array.isArray(this.fm.tags)) {
+				console.warn("'tags' is ignored, invalid data-type");
+				this.fm.tags = [];
+			}
+			for (const tag of this.fm.tags) {
+				if (tag.slice(0, 7) === "domain/") {
+					domains.push(tag.slice(7));
+				} else if (tag.slice(0, 10) === "component/") {
+					components.push(tag.slice(10));
+				} else if (tag.slice(0, 8) === "project/") {
+					projects.push(tag.slice(8));
+				} else if (tag.slice(0, 5) === "name/") {
+					names.push(tag.slice(5));
+				}
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.domain)) {
+			if (!(typeof this.fm.domain === "string")) {
+				console.warn("'domain' is ignored, invalid data-type");
+			} else {
+				domains.push(this.fm.domain);
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.domains)) {
+			if (!Array.isArray(this.fm.domains)) {
+				console.warn("'domains' is ignored, invalid data-type");
+			} else {
+				for (const domain of this.fm.domains) {
+					if (!(typeof domain === "string")) {
+						console.warn(
+							`'domains.${domain}' is ignored, invalid data-type`,
+						);
+					} else {
+						domains.push(domain);
+					}
+				}
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.component)) {
+			if (!(typeof this.fm.component === "string")) {
+				console.warn("'component' is ignored, invalid data-type");
+			} else {
+				components.push(this.fm.component);
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.components)) {
+			if (!Array.isArray(this.fm.components)) {
+				console.warn("'components' is ignored, invalid data-type");
+			} else {
+				for (const component of this.fm.components) {
+					if (!(typeof component === "string")) {
+						console.warn(
+							`'components.${component}' is ignored, invalid data-type`,
+						);
+					} else {
+						components.push(component);
+					}
+				}
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.project)) {
+			if (!(typeof this.fm.project === "string")) {
+				console.warn("'project' is ignored, invalid data-type");
+			} else {
+				projects.push(this.fm.project);
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.projects)) {
+			if (!Array.isArray(this.fm.projects)) {
+				console.warn("'projects' is ignored, invalid data-type");
+			} else {
+				for (const project of this.fm.projects) {
+					if (!(typeof project === "string")) {
+						console.warn(
+							`'projects.${project}' is ignored, invalid data-type`,
+						);
+					} else {
+						projects.push(project);
+					}
+				}
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.name)) {
+			if (!(typeof this.fm.name === "string")) {
+				console.warn("'project' is ignored, invalid data-type");
+			} else {
+				name.push(this.fm.name);
+			}
+		}
+
+		if (!Helper.nilCheck(this.fm.names)) {
+			if (!Array.isArray(this.fm.names)) {
+				console.warn("'projects' is ignored, invalid data-type");
+			} else {
+				for (const name of this.fm.names) {
+					if (!(typeof name === "string")) {
+						console.warn(
+							`'names.${name}' is ignored, invalid data-type`,
+						);
+					} else {
+						names.push(name);
+					}
+				}
+			}
+		}
+
+		// dereferencer les domains, components, projects, name?
+		// key: str (name | uuid) -> uuid
+		// key: str (uuid) -> name
+
+		this.domains = domains;
+		this.components = components;
+		this.projects = projects;
+		this.names = names;
+	}
+
+	getDomain(): string {
+		const domain = this.domains[0];
+		return domain === undefined ? "" : domain;
+	}
+}
 
 class ValidationError extends Error {
 	constructor(message) {
@@ -500,8 +654,8 @@ export const AutoField = {
 	},
 
 	goal(dv) {
-		let current = dv.current();
-		let fm = current.file.frontmatter;
+		const current = dv.current();
+		const fm = current.file.frontmatter;
 		if (fm === undefined) {
 			console.warn("fm is required");
 			return;
@@ -511,6 +665,7 @@ export const AutoField = {
 		// this.autoFieldNeededBy(dv, current);
 		// this.autoFieldTags(dv, fm);
 		//
+		const created_at = new Date(fm.created_at);
 		const logEntries = dv
 			.pages(`"${Paths.Logs}/${fm.uuid}"`)
 			.where((p) => p.type === 6)
@@ -529,16 +684,123 @@ export const AutoField = {
 			e.push(start.toISOString().slice(0, 10));
 
 			e.push(
-				dv.sectionLink(fme.uuid, "## Content", false, fme.uuid.slice(0, 8)),
+				dv.sectionLink(
+					fme.uuid,
+					"## Content",
+					false,
+					fme.uuid.slice(0, 8),
+				),
 			);
 
 			buff.push(e);
 		}
 
-		if (buff.length > 0) {
-			dv.header(2, "Logs");
-			dv.table(["created_at", "uuid"], buff);
+		const before = new Date(fm.before);
+		// days
+		const timeframe =
+			(before.getTime() - created_at.getTime()) / (1000 * 3600 * 24);
+		let timeframeText = "";
+		// 1 jour
+		// 1 semaine
+		// 2 semaine
+		// 1 mois
+		// 2 mois
+		// 6 mois
+		// 1 an
+		// 2 ans
+		// 5 ans
+		dv.header(3, "Timeframe");
+		if (timeframe > 0 && timeframe < 30) {
+			timeframeText = "runaway";
+		} else if (timeframe < 60) {
+			timeframeText = "10,000 feet";
+		} else if (timeframe < 360) {
+			timeframeText = "20,000 feet";
+		} else if (timeframe < 720) {
+			timeframeText = "30,000 feet";
+		} else if (timeframe < 1080) {
+			timeframeText = "40,000 feet";
+		} else {
+			timeframeText = "50,000 feet";
 		}
+
+		dv.paragraph(timeframeText);
+
+		if (buff.length > 0) {
+			dv.header(2, "Reviews");
+			dv.table(["reviewed_at", "uuid"], buff);
+		}
+	},
+
+	domain(dv) {
+		const current = dv.current();
+		const fm = current.file.frontmatter;
+		if (fm === undefined) {
+			console.warn("fm is required");
+			return;
+		}
+
+		Assert.True(fm.name !== undefined, "'name' is undefined");
+		const pages = dv
+			.pages(`"${Paths.Goals}"`)
+			.where((p) => {
+				const fml = p.file.frontmatter;
+				if (fml.status !== "todo") {
+					return false;
+				}
+
+				if (Helper.getDomain(fml) !== `domain/${fm.name}`) {
+					return false;
+				}
+
+				return true;
+			})
+			.array();
+
+		console.log(pages.length);
+		// rendu List[goal]
+		// trié par date d'écheance?
+		// uuid#Content | due date
+		const rs = [];
+		for (const page of pages) {
+			const fme = page.file.frontmatter;
+			if (
+				fme === undefined ||
+				fme.created_at === undefined ||
+				fme.before === undefined
+			) {
+				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+			}
+
+			const entry = {
+				uuid: fme.uuid,
+				createdAt: new Date(fme.created_at),
+				before: new Date(fme.before),
+			};
+			entry.delta = entry.before.getTime() - entry.createdAt.getTime();
+			rs.push(entry);
+		}
+
+		rs.sort((a, b) => a.delta - b.delta);
+
+		const buff = [];
+		for (const entry of rs) {
+			const e = [];
+			// e.push(entry.createdAt.toISOString().slice(0, 10));
+			e.push(
+				dv.sectionLink(
+					entry.uuid,
+					"## Content",
+					false,
+					entry.uuid.slice(0, 8),
+				),
+			);
+			e.push(entry.before.toISOString().slice(0, 10));
+			buff.push(e);
+		}
+
+		dv.header(2, "Goals");
+		dv.table(["uuid", "before"], buff);
 	},
 
 	resource(dv) {
@@ -548,6 +810,14 @@ export const AutoField = {
 
 // this must be called from `dataviewjs` codeblocks
 export const Renderer = {
+	makeLinkName(dv, f, anchor = "Content") {
+		if (Helper.nilCheck(f.frontmatter.name)) {
+			return Renderer.makeLinkShortUUID(dv, f, anchor);
+		}
+
+		return dv.sectionLink(f.path, anchor, false, `${f.frontmatter.name}`);
+	},
+
 	makeLinkAlias(dv, f, anchor = "Content") {
 		if (Helper.nilCheck(f.frontmatter.alias)) {
 			return Renderer.makeLinkShortUUID(dv, f, anchor);
@@ -568,6 +838,8 @@ export const Renderer = {
 	projectLogs(dv, data) {
 		const cols = ["type", "task_id", "log_id", "took", "reviewed"];
 		const buff = [];
+		let totalTime = 0;
+
 		for (const d of data) {
 			const f = d.file;
 			const fm = d.file.frontmatter;
@@ -584,6 +856,7 @@ export const Renderer = {
 			const doneAt = new Date(fm.done_at);
 			const delta = doneAt.getTime() - createdAt.getTime();
 
+			totalTime += delta;
 			const record = {
 				taskId: "",
 				logId: Renderer.makeLinkAlias(dv, f),
@@ -646,6 +919,50 @@ export const Renderer = {
 		}
 
 		dv.table(cols, buff);
+		// Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10,
+	},
+
+	goal(dv, data) {
+		const buff = [];
+		for (const fm of data) {
+			const created_at = fm.createdAt;
+			const logEntries = dv
+				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((p) => p.type === 6)
+				.sort((k) => k.created_at, "desc");
+			const before = new Date(fm.fm.before);
+
+			const timeframe =
+				(before.getTime() - created_at.getTime()) / (1000 * 3600 * 24);
+			let timeframeText = "";
+			if (timeframe > 0 && timeframe < 30) {
+				timeframeText = "runaway";
+			} else if (timeframe < 60) {
+				timeframeText = "10,000 feet";
+			} else if (timeframe < 360) {
+				timeframeText = "20,000 feet";
+			} else if (timeframe < 720) {
+				timeframeText = "30,000 feet";
+			} else if (timeframe < 1080) {
+				timeframeText = "40,000 feet";
+			} else {
+				timeframeText = "50,000 feet";
+			}
+
+			buff.push([
+				before.toISOString().slice(0, 10),
+				dv.sectionLink(
+					fm.uuid,
+					"## Content",
+					false,
+					fm.uuid.slice(0, 8),
+				),
+				fm.getDomain(),
+				timeframeText,
+			]);
+		}
+
+		dv.table(["deadline", "uuid", "domain", "timeframe"], buff);
 	},
 
 	inboxEntry(dv, data) {
@@ -859,6 +1176,33 @@ export const Renderer = {
 				`"uuid" id not defined for: ${f.path}`,
 			);
 			buff.push([Renderer.makeLinkAlias(dv, f)]);
+		}
+
+		dv.table(cols, buff);
+	},
+
+	basicDomain(dv, data) {
+		const cols = ["uuid", "name", "parents"];
+		const buff = [];
+		for (const d of data) {
+			const f = d.file;
+			const fm = d.file.frontmatter;
+			const parents = [];
+			for (const tag of fm.tags) {
+				if (tag.slice(0, 7) === "domain/") {
+					parents.push(tag);
+				}
+			}
+			Assert.True(
+				!Helper.nilCheck(fm.uuid),
+				`"uuid" id not defined for: ${f.path}`,
+			);
+			const entry = [
+				Renderer.makeLinkAlias(dv, f),
+				fm.name,
+				parents.length === 0 ? "\\-" : parents,
+			];
+			buff.push(entry);
 		}
 
 		dv.table(cols, buff);
@@ -2861,6 +3205,9 @@ export class ListMaker {
 			const parent = this.dv
 				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
 				.array();
+			if (parent.length !== 1) {
+				continue;
+			}
 			Assert.True(
 				parent.length === 1,
 				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
@@ -3050,10 +3397,13 @@ export class ListMaker {
 			const parent = this.dv
 				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
 				.array();
-			Assert.True(
-				parent.length === 1,
-				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
-			);
+			if (parent.length !== 1) {
+				continue;
+			}
+			// Assert.True(
+			// 	parent.length === 1,
+			// 	`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
+			// );
 			fm.project = Helper.getProject(parent[0].file.frontmatter);
 			fm.area = Helper.getArea(parent[0].file.frontmatter, true);
 			if (
@@ -3080,6 +3430,7 @@ export class ListMaker {
 
 		const filterBy = this.frontmatter.parseListFilterBy(fml);
 		const rs = [];
+		let totalTime = 0;
 		rs.push(["header", 1, project.name]);
 
 		const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
@@ -3104,10 +3455,13 @@ export class ListMaker {
 			const parent = this.dv
 				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
 				.array();
-			Assert.True(
-				parent.length === 1,
-				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
-			);
+			if (parent.length !== 1) {
+				continue;
+			}
+			// Assert.True(
+			// 	parent.length === 1,
+			// 	`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
+			// );
 			fm.project = Helper.getProject(parent[0].file.frontmatter);
 			fm.area = Helper.getArea(parent[0].file.frontmatter, true);
 			if (
@@ -3127,7 +3481,17 @@ export class ListMaker {
 			} else {
 				buff[date].push(e);
 			}
+
+			const createdAt = new Date(fm.created_at);
+			const doneAt = new Date(fm.done_at);
+			const delta = doneAt.getTime() - createdAt.getTime();
+
+			totalTime += delta;
 		}
+
+		dv.paragraph(
+			`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10}`,
+		);
 
 		const keys = Object.keys(buff);
 		keys.sort();
@@ -3944,6 +4308,23 @@ export class ListMaker {
 		return rs;
 	}
 
+	domains() {
+		const pages = this.dv
+			.pages(`"Domains"`)
+			.sort((k) => k.name, "asc")
+			.array();
+		const rs = [];
+		const buff = [];
+		for (const page of pages) {
+			const fm = page.file.frontmatter;
+			buff.push(page);
+			new FrontmatterJS(page);
+		}
+		rs.push(["array", Renderer.basicDomain, buff]);
+
+		return rs;
+	}
+
 	relations() {
 		const bins = {
 			project: this.dv.pages(`"Projects"`),
@@ -3988,6 +4369,35 @@ export class ListMaker {
 		const rs = [];
 		rs.push(["header", 1, "Praxis"]);
 		rs.push(["array", Renderer.basicTask, pages]);
+
+		return rs;
+	}
+
+	goals() {
+		const fm = this.frontmatter.getCurrentFrontmatter();
+		const rs = [];
+		const pages = this.dv.pages(`"${Paths.Goals}"`).where((page) => {
+			const fmp = page.file.frontmatter;
+			if (fmp.status !== "todo") {
+				return false;
+			}
+
+			return true;
+		});
+
+		const buff = [];
+		for (const page of pages) {
+			const p = new FrontmatterJS(page);
+			buff.push(p);
+		}
+
+		buff.sort((a, b) => {
+			const dta = new Date(a.fm.before);
+			const dtb = new Date(b.fm.before);
+			return dta.getTime() - dtb.getTime();
+		});
+		rs.push(["header", 1, "Goals"]);
+		rs.push(["array", Renderer.goal, buff]);
 
 		return rs;
 	}

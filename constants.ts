@@ -1,5 +1,6 @@
 export const Paths = {
 	Tasks: "813 Tasks",
+	Goals: "Goals",
 	Slipbox: "803 Slipbox",
 	Inbox: "800 Inbox",
 	Refs: "802 Refs",
