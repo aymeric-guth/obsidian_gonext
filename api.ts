@@ -10,6 +10,35 @@ class FrontmatterJS {
 	public domains: string[];
 	public names: string[];
 	public projects: string[];
+	public fm: any;
+
+	singular(values: string[], field: string) {
+		if (!Helper.nilCheck(this.fm[field])) {
+			if (typeof this.fm[field] === "string") {
+				values.push(this.fm[field]);
+			} else {
+				console.warn(`'${field}' is ignored, invalid data-type: '${typeof this.fm[field]}'`);
+			}
+		}
+	}
+
+	plural(values: string[], field: string) {
+		if (!Helper.nilCheck(this.fm[field])) {
+			if (!Array.isArray(this.fm[field])) {
+				console.warn(`'${field}' is ignored, invalid data-type: '${field}'`);
+			} else {
+				for (const value of this.fm[field]) {
+					if (typeof value === "string") {
+						values.push(value);
+					} else {
+						console.warn(
+							`'${value}s.${value}' is ignored, invalid data-type: '${typeof value}'`,
+						);
+					}
+				}
+			}
+		}
+	}
 
 	constructor(page) {
 		Assert.True(page !== undefined, "page is undefined");
@@ -54,105 +83,14 @@ class FrontmatterJS {
 			}
 		}
 
-		if (!Helper.nilCheck(this.fm.domain)) {
-			if (!(typeof this.fm.domain === "string")) {
-				console.warn("'domain' is ignored, invalid data-type");
-			} else {
-				domains.push(this.fm.domain);
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.domains)) {
-			if (!Array.isArray(this.fm.domains)) {
-				console.warn("'domains' is ignored, invalid data-type");
-			} else {
-				for (const domain of this.fm.domains) {
-					if (!(typeof domain === "string")) {
-						console.warn(
-							`'domains.${domain}' is ignored, invalid data-type`,
-						);
-					} else {
-						domains.push(domain);
-					}
-				}
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.component)) {
-			if (!(typeof this.fm.component === "string")) {
-				console.warn("'component' is ignored, invalid data-type");
-			} else {
-				components.push(this.fm.component);
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.components)) {
-			if (!Array.isArray(this.fm.components)) {
-				console.warn("'components' is ignored, invalid data-type");
-			} else {
-				for (const component of this.fm.components) {
-					if (!(typeof component === "string")) {
-						console.warn(
-							`'components.${component}' is ignored, invalid data-type`,
-						);
-					} else {
-						components.push(component);
-					}
-				}
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.project)) {
-			if (!(typeof this.fm.project === "string")) {
-				console.warn("'project' is ignored, invalid data-type");
-			} else {
-				projects.push(this.fm.project);
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.projects)) {
-			if (!Array.isArray(this.fm.projects)) {
-				console.warn("'projects' is ignored, invalid data-type");
-			} else {
-				for (const project of this.fm.projects) {
-					if (!(typeof project === "string")) {
-						console.warn(
-							`'projects.${project}' is ignored, invalid data-type`,
-						);
-					} else {
-						projects.push(project);
-					}
-				}
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.name)) {
-			if (!(typeof this.fm.name === "string")) {
-				console.warn("'project' is ignored, invalid data-type");
-			} else {
-				names.push(this.fm.name);
-			}
-		}
-
-		if (!Helper.nilCheck(this.fm.names)) {
-			if (!Array.isArray(this.fm.names)) {
-				console.warn("'projects' is ignored, invalid data-type");
-			} else {
-				for (const name of this.fm.names) {
-					if (!(typeof name === "string")) {
-						console.warn(
-							`'names.${name}' is ignored, invalid data-type`,
-						);
-					} else {
-						names.push(name);
-					}
-				}
-			}
-		}
-
-		// dereferencer les domains, components, projects, name?
-		// key: str (name | uuid) -> uuid
-		// key: str (uuid) -> name
+		this.singular(domains, "domain");
+		this.plural(domains, "domains");
+		this.singular(components, "components");
+		this.plural(components, "components");
+		this.singular(projects, "project");
+		this.plural(projects, "projects");
+		this.singular(names, "name");
+		this.plural(names, "names");
 
 		this.domains = domains;
 		this.components = components;
@@ -161,17 +99,27 @@ class FrontmatterJS {
 	}
 
 	getDomain(): string {
-		const domain = this.domains[0];
-		return domain === undefined ? "" : domain;
+		return this.domains[0] === undefined ? "" : this.domains[0];
 	}
 
 	getDomains(): string[] {
 		return this.domains;
 	}
 
+	getComponents(): string[] {
+		return this.components;
+	}
+
+	getProject(): string {
+		return this.projects[0] === undefined ? "" : this.projects[0];
+	}
+
+	getProjects(): string[] {
+		return this.projects;
+	}
+
 	getName(): string {
-		const name = this.names[0];
-		return name === undefined ? "" : name;
+		return this.names[0] === undefined ? "" : this.names[0];
 	}
 
 	getNames(): string[] {
@@ -3061,11 +3009,12 @@ export class ListMaker {
 
 	projectTasksSheetRelationFrontmatter(dv) {
 		const current = dv.current();
-		const fml = current.file.frontmatter;
+		// dconst fml = current.file.frontmatter;
+		const fm = new FrontmatterJS(current);
 
 		return {
-			name: Helper.getName(fml),
-			uuid: fml.uuid,
+			name: fm.getName(),
+			uuid: fm.uuid,
 		};
 	}
 
@@ -4343,6 +4292,15 @@ export class ListMaker {
 		return rs;
 	}
 
+	projects() {
+		const rs = [];
+		const projects = this.dv.pages(`"Projects"`).sort((k) => k.name, "asc");
+		projects.sort();
+		rs.push(["header", 1, "Projects"]);
+		rs.push(["array", Renderer.basicRelation, projects]);
+
+		return rs;
+	}
 	relations() {
 		const bins = {
 			project: this.dv.pages(`"Projects"`),
