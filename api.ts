@@ -3,9 +3,18 @@ import { unzip } from "zlib";
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
 class FrontmatterJS {
+	public uuid: string;
+	public version: string;
+	public createdAt: Date;
+	public components: string[];
+	public domains: string[];
+	public names: string[];
+	public projects: string[];
+
 	constructor(page) {
 		Assert.True(page !== undefined, "page is undefined");
-		const f = page.file;
+		this.f = page.file;
+		const f = this.f;
 		Assert.True(f !== undefined, "f is undefined");
 		this.fm = f.frontmatter;
 		Assert.True(this.fm !== undefined, "fm is undefined");
@@ -31,6 +40,7 @@ class FrontmatterJS {
 				console.warn("'tags' is ignored, invalid data-type");
 				this.fm.tags = [];
 			}
+
 			for (const tag of this.fm.tags) {
 				if (tag.slice(0, 7) === "domain/") {
 					domains.push(tag.slice(7));
@@ -120,7 +130,7 @@ class FrontmatterJS {
 			if (!(typeof this.fm.name === "string")) {
 				console.warn("'project' is ignored, invalid data-type");
 			} else {
-				name.push(this.fm.name);
+				names.push(this.fm.name);
 			}
 		}
 
@@ -153,6 +163,19 @@ class FrontmatterJS {
 	getDomain(): string {
 		const domain = this.domains[0];
 		return domain === undefined ? "" : domain;
+	}
+
+	getDomains(): string[] {
+		return this.domains;
+	}
+
+	getName(): string {
+		const name = this.names[0];
+		return name === undefined ? "" : name;
+	}
+
+	getNames(): string[] {
+		return this.names;
 	}
 }
 
@@ -1185,21 +1208,16 @@ export const Renderer = {
 		const cols = ["uuid", "name", "parents"];
 		const buff = [];
 		for (const d of data) {
-			const f = d.file;
-			const fm = d.file.frontmatter;
-			const parents = [];
-			for (const tag of fm.tags) {
-				if (tag.slice(0, 7) === "domain/") {
-					parents.push(tag);
-				}
-			}
+			const fm = new FrontmatterJS(d);
+			const parents = fm.getDomains();
+
 			Assert.True(
 				!Helper.nilCheck(fm.uuid),
-				`"uuid" id not defined for: ${f.path}`,
+				`"uuid" id not defined for: ${fm.f.path}`,
 			);
 			const entry = [
-				Renderer.makeLinkAlias(dv, f),
-				fm.name,
+				Renderer.makeLinkAlias(dv, fm.f),
+				fm.getName(),
 				parents.length === 0 ? "\\-" : parents,
 			];
 			buff.push(entry);
