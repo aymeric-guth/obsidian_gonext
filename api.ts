@@ -14,10 +14,15 @@ class FrontmatterJS {
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
-			if (typeof this.fm[field] === "string") {
-				values.push(this.fm[field]);
+			const value = this.fm[field];
+			if (typeof value === "string") {
+				if (!values.contains(value)) {
+					values.push(value);
+				}
 			} else {
-				console.warn(`'${field}' is ignored, invalid data-type: '${typeof this.fm[field]}'`);
+				console.warn(
+					`'${field}' is ignored, invalid data-type: '${typeof this.fm[field]}'`,
+				);
 			}
 		}
 	}
@@ -25,11 +30,15 @@ class FrontmatterJS {
 	plural(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
 			if (!Array.isArray(this.fm[field])) {
-				console.warn(`'${field}' is ignored, invalid data-type: '${field}'`);
+				console.warn(
+					`'${field}' is ignored, invalid data-type: '${field}'`,
+				);
 			} else {
 				for (const value of this.fm[field]) {
 					if (typeof value === "string") {
-						values.push(value);
+						if (!values.contains(value)) {
+							values.push(value);
+						}
 					} else {
 						console.warn(
 							`'${value}s.${value}' is ignored, invalid data-type: '${typeof value}'`,
@@ -41,12 +50,12 @@ class FrontmatterJS {
 	}
 
 	constructor(page) {
-		Assert.True(page !== undefined, "page is undefined");
+		Assert.True(page !== undefined, "'page' is undefined");
 		this.f = page.file;
 		const f = this.f;
-		Assert.True(f !== undefined, "f is undefined");
+		Assert.True(f !== undefined, "'f' is undefined");
 		this.fm = f.frontmatter;
-		Assert.True(this.fm !== undefined, "fm is undefined");
+		Assert.True(this.fm !== undefined, "'fm' is undefined");
 		Assert.True(this.fm.uuid !== undefined, "'uuid' is undefined");
 		console.log(`uuid: ${this.fm.uuid}`);
 		Assert.True(this.fm.version !== undefined, "'version' is undefined");
@@ -91,6 +100,7 @@ class FrontmatterJS {
 		this.plural(projects, "projects");
 		this.singular(names, "name");
 		this.plural(names, "names");
+		this.plural(names, "alias");
 
 		this.domains = domains;
 		this.components = components;
@@ -98,8 +108,12 @@ class FrontmatterJS {
 		this.names = names;
 	}
 
-	getDomain(): string {
-		return this.domains[0] === undefined ? "" : this.domains[0];
+	getDomain(emptyDefault = true): string {
+		if (emptyDefault) {
+			return this.domains[0];
+		} else {
+			return this.domains[0] === undefined ? "unknown" : this.domains[0];
+		}
 	}
 
 	getDomains(): string[] {
@@ -110,20 +124,60 @@ class FrontmatterJS {
 		return this.components;
 	}
 
-	getProject(): string {
-		return this.projects[0] === undefined ? "" : this.projects[0];
+	getProject(emptyDefault = true): string {
+		if (emptyDefault) {
+			return this.projects[0];
+		} else {
+			return this.projects[0] === undefined ? "" : this.projects[0];
+		}
 	}
 
 	getProjects(): string[] {
 		return this.projects;
 	}
 
-	getName(): string {
-		return this.names[0] === undefined ? "" : this.names[0];
+	getName(emptyDefault = true): string {
+		if (emptyDefault) {
+			return this.names[0];
+		} else {
+			return this.projects[0] === undefined ? "" : this.projects[0];
+		}
 	}
 
 	getNames(): string[] {
 		return this.names;
+	}
+
+	resolve(dv) {
+		const domains = [];
+		for (const domain of this.domains) {
+			if (Helper.isUUID(domain)) {
+				const pages = dv
+					.pages(`"${Paths.Domains}"`)
+					.where((page) => page.file.frontmatter.uuid === domain);
+				if (pages.length > 1) {
+					throw new Error();
+				} else if (pages.length === 1) {
+					const page = pages[0];
+					domains.push(page.file.frontmatter.name);
+				}
+			} else {
+				const pages = dv
+					.pages(`"${Paths.Domains}"`)
+					.where((page) => page.file.frontmatter.name === domain);
+				if (pages.length > 1) {
+					throw new Error();
+				} else if (pages.length === 1) {
+					const page = pages[0];
+					domains.push(page.file.frontmatter.name);
+				}
+			}
+		}
+		if (domains.length !== this.domains.length) {
+			console.warn(`Domain resolution failed for: ${this.domains}`);
+		}
+
+		this.domains = domains;
 	}
 }
 
@@ -403,6 +457,13 @@ export const Helper = {
 				) + " h"
 			);
 		}
+	},
+
+	isUUID(val: string): boolean {
+		if (typeof val !== "string") {
+			return false;
+		}
+		return val.length === 36;
 	},
 };
 
@@ -712,66 +773,80 @@ export const AutoField = {
 		}
 
 		Assert.True(fm.name !== undefined, "'name' is undefined");
-		const pages = dv
-			.pages(`"${Paths.Goals}"`)
-			.where((p) => {
-				const fml = p.file.frontmatter;
-				if (fml.status !== "todo") {
-					return false;
+		{
+			const pages = dv
+				.pages(`"${Paths.Goals}"`)
+				.where((p) => {
+					const fml = new FrontmatterJS(p);
+					if (fml.fm.status !== "todo") {
+						return false;
+					}
+
+					if (fml.getDomain() !== fm.name) {
+						return false;
+					}
+
+					return true;
+				})
+				.array();
+
+			// rendu List[goal]
+			// trié par date d'écheance?
+			// uuid#Content | due date
+			const rs = [];
+			for (const page of pages) {
+				const fme = page.file.frontmatter;
+				if (
+					fme === undefined ||
+					fme.created_at === undefined ||
+					fme.before === undefined
+				) {
+					throw new Error(`Invalid frontmatter: ${fme.uuid}`);
 				}
 
-				if (Helper.getDomain(fml) !== `domain/${fm.name}`) {
-					return false;
-				}
-
-				return true;
-			})
-			.array();
-
-		console.log(pages.length);
-		// rendu List[goal]
-		// trié par date d'écheance?
-		// uuid#Content | due date
-		const rs = [];
-		for (const page of pages) {
-			const fme = page.file.frontmatter;
-			if (
-				fme === undefined ||
-				fme.created_at === undefined ||
-				fme.before === undefined
-			) {
-				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+				const entry = {
+					uuid: fme.uuid,
+					createdAt: new Date(fme.created_at),
+					before: new Date(fme.before),
+				};
+				entry.delta =
+					entry.before.getTime() - entry.createdAt.getTime();
+				rs.push(entry);
 			}
 
-			const entry = {
-				uuid: fme.uuid,
-				createdAt: new Date(fme.created_at),
-				before: new Date(fme.before),
-			};
-			entry.delta = entry.before.getTime() - entry.createdAt.getTime();
-			rs.push(entry);
+			rs.sort((a, b) => a.delta - b.delta);
+
+			dv.header(2, "Goals");
+
+			const buff = [];
+			for (const entry of rs) {
+				const e = [];
+				// e.push(entry.createdAt.toISOString().slice(0, 10));
+				e.push(
+					dv.sectionLink(
+						entry.uuid,
+						"## Content",
+						false,
+						entry.uuid.slice(0, 8),
+					),
+				);
+				e.push(entry.before.toISOString().slice(0, 10));
+				buff.push(e);
+			}
+			dv.table(["uuid", "before"], buff);
 		}
 
-		rs.sort((a, b) => a.delta - b.delta);
-
-		const buff = [];
-		for (const entry of rs) {
-			const e = [];
-			// e.push(entry.createdAt.toISOString().slice(0, 10));
-			e.push(
-				dv.sectionLink(
-					entry.uuid,
-					"## Content",
-					false,
-					entry.uuid.slice(0, 8),
-				),
-			);
-			e.push(entry.before.toISOString().slice(0, 10));
-			buff.push(e);
+		{
+			const fmd = new FrontmatterJS({file: {frontmatter: fm}});
+			fmd.resolve(dv);
+			const buff = [];
+			for (const domain of fmd.getDomains()) {
+				console.log(domain);
+				buff.push([`#domain/${domain}`,]);
+			}
+			dv.header(2, "Domains");
+			dv.table(["name", ], buff);
 		}
-
-		dv.header(2, "Goals");
-		dv.table(["uuid", "before"], buff);
 	},
 
 	resource(dv) {
@@ -1152,21 +1227,44 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
+	// ne pas réutiliser pour le moment
 	basicDomain(dv, data) {
 		const cols = ["uuid", "name", "parents"];
 		const buff = [];
 		for (const d of data) {
-			const fm = new FrontmatterJS(d);
-			const parents = fm.getDomains();
+			const parents = d.getDomains();
 
 			Assert.True(
-				!Helper.nilCheck(fm.uuid),
-				`"uuid" id not defined for: ${fm.f.path}`,
+				!Helper.nilCheck(d.uuid),
+				`"uuid" id not defined for: ${d.f.path}`,
 			);
+			const values = [];
+			for (const parent of parents) {
+				const page = dv
+					.pages(`"${Paths.Domains}"`)
+					.where((page) => page.file.frontmatter.name === parent);
+				if (page.length !== 1) {
+					console.warn(
+						`Unknown domain '${parent}' delcared by: ${d.file.frontmatter.uuid}`,
+					);
+					continue;
+				}
+				values.push(
+					dv.sectionLink(
+						`${Paths.Domains}/${page[0].file.frontmatter.uuid}`,
+						"Content",
+						false,
+						`${parent}`,
+					),
+				);
+
+				// values.push(`#domain/${parent}`);
+			}
+
 			const entry = [
-				Renderer.makeLinkAlias(dv, fm.f),
-				fm.getName(),
-				parents.length === 0 ? "\\-" : parents,
+				Renderer.makeLinkAlias(dv, d.f),
+				d.getName(),
+				values.length === 0 ? "" : values,
 			];
 			buff.push(entry);
 		}
@@ -2046,9 +2144,12 @@ export class ListMaker {
 
 		for (const a of ns) {
 			const root = a.split("/");
+			console.log(`a: '${a}'`);
+			console.log(`root: '${root}'`);
 			Assert.True(root.length === 2, `Invalid tag: '${a}'`);
 			const parent =
 				root[0].slice(0, 1) === "!" ? root[0].slice(1) : root[0];
+			// console.log(parent)
 			const name = Helper.getTag(fm, parent);
 
 			if (a.slice(0, 1) === "!") {
@@ -3395,6 +3496,15 @@ export class ListMaker {
 			throw new Error(`Invalid frontmatter, cannot proceed`);
 		}
 
+		const before = Helper.nilCheck(fml.before)
+			? new Date(0)
+			: new Date(fml.before);
+		const after = Helper.nilCheck(fml.after)
+			? new Date()
+			: new Date(fml.after);
+
+		console.log(`before: '${before}'`);
+		console.log(`after: '${after}'`);
 		const filterBy = this.frontmatter.parseListFilterBy(fml);
 		const rs = [];
 		let totalTime = 0;
@@ -3441,7 +3551,18 @@ export class ListMaker {
 			if (Helper.nilCheck(fm.done_at)) {
 				continue;
 			}
+
 			const date = fm.done_at.slice(0, 10);
+			const createdAt = new Date(fm.created_at);
+			const doneAt = new Date(fm.done_at);
+
+			if (createdAt > before) {
+				continue;
+			}
+
+			if (createdAt < after) {
+				continue;
+			}
 
 			if (buff[date] === undefined) {
 				buff[date] = [e];
@@ -3449,8 +3570,6 @@ export class ListMaker {
 				buff[date].push(e);
 			}
 
-			const createdAt = new Date(fm.created_at);
-			const doneAt = new Date(fm.done_at);
 			const delta = doneAt.getTime() - createdAt.getTime();
 
 			totalTime += delta;
@@ -4151,8 +4270,9 @@ export class ListMaker {
 				e.file.frontmatter.createdAt = this.frontmatter.getCreatedAt(
 					e.file,
 				);
+				const fmjs = new FrontmatterJS(e);
 				fm.project = Helper.getProject(fm, true);
-				fm.domain = Helper.getDomain(fm, true);
+				fm.domain = `domain/${fmjs.getDomain()}`;
 				fm.components = Helper.getComponents(fm);
 
 				if (e.file.size < minSize) {
@@ -4277,15 +4397,52 @@ export class ListMaker {
 
 	domains() {
 		const pages = this.dv
-			.pages(`"Domains"`)
+			.pages(`"${Paths.Domains}"`)
 			.sort((k) => k.name, "asc")
 			.array();
 		const rs = [];
+
 		const buff = [];
 		for (const page of pages) {
-			const fm = page.file.frontmatter;
-			buff.push(page);
-			new FrontmatterJS(page);
+			const fm = new FrontmatterJS(page);
+			fm.resolve(this.dv);
+			buff.push(fm);
+		}
+		rs.push(["array", Renderer.basicDomain, buff]);
+
+		return rs;
+	}
+
+	components() {
+		const pages = this.dv
+			.pages(`"${Paths.Components}"`)
+			.sort((k) => k.name, "asc")
+			.array();
+		const rs = [];
+
+		const buff = [];
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			fm.resolve(this.dv);
+			buff.push(fm);
+		}
+		rs.push(["array", Renderer.basicDomain, buff]);
+
+		return rs;
+	}
+
+	names() {
+		const pages = this.dv
+			.pages(`"${Paths.Names}"`)
+			.sort((k) => k.name, "asc")
+			.array();
+		const rs = [];
+
+		const buff = [];
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			fm.resolve(this.dv);
+			buff.push(fm);
 		}
 		rs.push(["array", Renderer.basicDomain, buff]);
 
@@ -4294,33 +4451,52 @@ export class ListMaker {
 
 	projects() {
 		const rs = [];
-		const projects = this.dv.pages(`"Projects"`).sort((k) => k.name, "asc");
-		projects.sort();
-		rs.push(["header", 1, "Projects"]);
-		rs.push(["array", Renderer.basicRelation, projects]);
-
-		return rs;
-	}
-	relations() {
 		const bins = {
-			project: this.dv.pages(`"Projects"`),
-			org: this.dv.pages(`"Orgs"`),
-			domain: this.dv.pages(`"Domains"`),
-			component: this.dv.pages(`"Components"`),
+			active: [],
+			inactive: [],
 		};
-		const rs = [];
-		const keys = Object.keys(bins);
-		keys.sort();
 
-		for (const key of keys) {
-			const relations = bins[key];
-			if (relations.length <= 0) {
+		const pages = this.dv.pages(`"Projects"`).sort((k) => k.name, "asc");
+		for (const project of pages) {
+			const fmProject = new FrontmatterJS(project);
+			if (fmProject.getName() === "adhoc") {
+				bins.active.push(project);
 				continue;
 			}
 
-			rs.push(["header", 3, key[0].toUpperCase() + key.slice(1)]);
-			rs.push(["array", Renderer.basicRelation, relations]);
+			const tasks = this.dv
+				.pages(`#project/${fmProject.getName()}`)
+				.where((page) => {
+					if (page.file.folder !== `${Paths.Tasks}`) {
+						return false;
+					}
+
+					const fmTask = new FrontmatterJS(page);
+					if (fmTask.getProject() !== fmProject.getName()) {
+						return false;
+					}
+
+					if (
+						fmTask.fm.status === "todo" ||
+						fmTask.fm.status === "doing"
+					) {
+						return true;
+					}
+
+					return false;
+				});
+
+			if (tasks.length > 0) {
+				bins.active.push(project);
+			} else {
+				bins.inactive.push(project);
+			}
 		}
+
+		rs.push(["header", 1, "Projects"]);
+		rs.push(["array", Renderer.basicRelation, bins.active]);
+		rs.push(["header", 2, "Inactive"]);
+		rs.push(["array", Renderer.basicRelation, bins.inactive]);
 
 		return rs;
 	}

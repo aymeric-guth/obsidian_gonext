@@ -1,5 +1,6 @@
 export const Paths = {
 	Tasks: "813 Tasks",
+	Components: "Components",
 	Goals: "Goals",
 	Slipbox: "803 Slipbox",
 	Inbox: "800 Inbox",
@@ -10,6 +11,8 @@ export const Paths = {
 	Journal: "Journal",
 	Resources: "Resources",
 	Projects: "100 Projects",
+	Domains: "Domains",
+	Names: "Names",
 };
 
 export const Status = {
