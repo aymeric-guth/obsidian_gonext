@@ -2,6 +2,63 @@ import { assert, group, time } from "console";
 import { unzip } from "zlib";
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
+class FilterBy {
+	public fm: any;
+	public predicates: string[];
+
+	constructor(fm: any) {
+		this.fm = fm;
+		if (fm === undefined) {
+			this.predicates = [];
+		} else {
+			this.predicates = Array.isArray(fm.filter_by) ? fm.filter_by : [];
+		}
+	}
+
+	nameInNamespace(fm: any, ns: string[]) {
+		let found = false;
+		if (ns.length === 0) {
+			return true;
+		}
+
+		for (const a of ns) {
+			const root = a.split("/");
+			Assert.True(root.length === 2, `Invalid tag: '${a}'`);
+			const parent =
+				root[0].slice(0, 1) === "!" ? root[0].slice(1) : root[0];
+			// console.log(parent)
+			const name = Helper.getTag(fm, parent);
+
+			if (a.slice(0, 1) === "!") {
+				// negative match, discard entry
+				if (name === a.slice(1)) {
+					return false;
+					// no match, reinit
+				} else {
+					found = true;
+				}
+			} else {
+				// positive match, keep entry
+				if (name === a) {
+					found = true;
+					// no match, reinit
+				} else {
+					found = false;
+				}
+			}
+		}
+
+		return found;
+	}
+
+	filter(fm: any) {
+		if (this.predicates.length == 0) {
+			return false;
+		}
+		return !this.nameInNamespace(fm, this.predicates);
+	}
+}
+
 class FrontmatterJS {
 	public uuid: string;
 	public version: string;
@@ -4527,6 +4584,7 @@ export class ListMaker {
 
 	goals() {
 		const fm = this.frontmatter.getCurrentFrontmatter();
+		const filterBy = new FilterBy(fm);
 		const rs = [];
 		const pages = this.dv.pages(`"${Paths.Goals}"`).where((page) => {
 			const fmp = page.file.frontmatter;
@@ -4540,6 +4598,10 @@ export class ListMaker {
 		const buff = [];
 		for (const page of pages) {
 			const p = new FrontmatterJS(page);
+			if (filterBy.filter(page.file.frontmatter)) {
+				continue;
+			}
+
 			buff.push(p);
 		}
 
