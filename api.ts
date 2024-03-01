@@ -5,6 +5,7 @@ import { Paths, Status, Types, Namespace, Default } from "./constants";
 class FilterBy {
 	public fm: any;
 	public predicates: string[];
+	public contexts: string[];
 
 	constructor(fm: any) {
 		this.fm = fm;
@@ -124,11 +125,13 @@ class FrontmatterJS {
 		this.components = [];
 		this.domains = [];
 		this.projects = [];
+		this.contexts = [];
 
 		const domains = [];
 		const components = [];
 		const projects = [];
 		const names = [];
+		const contexts = [];
 
 		if (!Helper.nilCheck(this.fm.tags)) {
 			if (!Array.isArray(this.fm.tags)) {
@@ -145,6 +148,8 @@ class FrontmatterJS {
 					projects.push(tag.slice(8));
 				} else if (tag.slice(0, 5) === "name/") {
 					names.push(tag.slice(5));
+				} else if (tag.slice(0, 8) == "context/") {
+					contexts.push(tag.slice(8));
 				}
 			}
 		}
@@ -163,6 +168,7 @@ class FrontmatterJS {
 		this.components = components;
 		this.projects = projects;
 		this.names = names;
+		this.contexts = contexts;
 	}
 
 	getDomain(emptyDefault = true): string {
@@ -203,6 +209,14 @@ class FrontmatterJS {
 
 	getNames(): string[] {
 		return this.names;
+	}
+
+	getContext(emptyDefault = true): string {
+		if (emptyDefault) {
+			return this.contexts[0];
+		} else {
+			return this.contexts[0] === undefined ? "" : this.contexts[0];
+		}
 	}
 
 	resolve(dv) {
@@ -741,6 +755,51 @@ export const AutoField = {
 			AutoField.revisions(dv, pages);
 		}
 	},
+	autoFieldTitle(dv, fm) {
+		const title = fm.alias;
+		if (title == undefined) {
+			return;
+		}
+
+		dv.header(1, title);
+	},
+	autoFieldAuthors(dv, fm) {
+		const authors = fm.authors;
+		if (authors === undefined || authors.length === 0) {
+			return;
+		}
+		dv.header(2, "Authors");
+		dv.list(authors);
+	},
+
+	autoFieldTags(dv, fm) {
+		const tags = fm.tags;
+		if (tags == undefined || tags.length === 0) {
+			return;
+		}
+
+		tags.sort();
+		dv.header(2, "Tags");
+		let s = "";
+		for (const tag of tags) {
+			s += ` #${tag}`;
+		}
+		dv.paragraph(s);
+	},
+
+	literature(dv) {
+		const current = dv.current();
+		const fm = current.file.frontmatter;
+		if (fm === undefined) {
+			return;
+		}
+		if (Helper.nilCheck(fm.authors)) {
+		} else {
+			this.autoFieldTitle(dv, fm);
+			this.autoFieldAuthors(dv, fm);
+			this.autoFieldTags(dv, fm);
+		}
+	},
 
 	goal(dv) {
 		const current = dv.current();
@@ -894,15 +953,15 @@ export const AutoField = {
 		}
 
 		{
-			const fmd = new FrontmatterJS({file: {frontmatter: fm}});
+			const fmd = new FrontmatterJS({ file: { frontmatter: fm } });
 			fmd.resolve(dv);
 			const buff = [];
 			for (const domain of fmd.getDomains()) {
 				console.log(domain);
-				buff.push([`#domain/${domain}`,]);
+				buff.push([`#domain/${domain}`]);
 			}
 			dv.header(2, "Domains");
-			dv.table(["name", ], buff);
+			dv.table(["name"], buff);
 		}
 	},
 
@@ -3090,8 +3149,12 @@ export class ListMaker {
 		} else {
 			const ontologyMap = {};
 			const pages = {};
-			for (const domain of Object.keys(bins)) {
-				for (const component of Object.keys(bins[domain])) {
+			const keys = Object.keys(bins);
+			keys.sort();
+			for (const domain of keys) {
+				const keys2 = Object.keys(bins[domain]);
+				keys2.sort();
+				for (const component of keys2) {
 					for (const task of bins[domain][component]) {
 						if (task.file.frontmatter.uuid === undefined) {
 							continue;
@@ -3104,7 +3167,11 @@ export class ListMaker {
 					}
 				}
 			}
-			for (const uuid of Object.keys(pages)) {
+
+			const keys3 = Object.keys(pages);
+			keys3.sort();
+
+			for (const uuid of keys3) {
 				const page = pages[uuid];
 				const fm = page.file.frontmatter;
 				const domain = Helper.getDomain(fm);
@@ -3128,9 +3195,9 @@ export class ListMaker {
 				}
 			}
 
-			const keys = Object.keys(ontologyMap);
-			keys.sort((a, b) => ontologyMap[a].length - ontologyMap[b].length);
-			for (const key of keys.reverse()) {
+			const keys4 = Object.keys(ontologyMap);
+			keys4.sort((a, b) => ontologyMap[a].length - ontologyMap[b].length);
+			for (const key of keys4.reverse()) {
 				rs.push(["header", 2, key]);
 				for (const page of ontologyMap[key]) {
 					rs.push([
@@ -3174,6 +3241,88 @@ export class ListMaker {
 			name: fm.getName(),
 			uuid: fm.uuid,
 		};
+	}
+
+	contextTasksSheet(dv) {
+		// const project = this.projectTasksSheetRelationFrontmatter(dv);
+		const minPriority = 0;
+
+		const rs = [];
+		// rs.push(["header", 2, project.name]);
+
+		const bins = {
+			doable: [],
+			waiting: [],
+			journal: [],
+		};
+
+		// const tasks = this.getProjectTasks(project.name);
+		const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = page.file.frontmatter;
+			if (page.type !== Types.Task && page.type !== Types.Media) {
+				return false;
+			}
+
+			if (fm.status === Status.Done) {
+				return false;
+			}
+
+			const fmjs = new FrontmatterJS(page);
+			if (fmjs.getContext() !== `outside`) {
+				return false;
+			}
+
+			return true;
+		});
+
+		for (const task of pages) {
+			const fm = task.file.frontmatter;
+
+			if (fm.priority !== undefined && fm.priority < minPriority) {
+				continue;
+			}
+
+			if (this.noteHelper.isDoable(task)) {
+				bins.doable.push(task);
+			} else if (fm.status === Status.Todo) {
+				bins.waiting.push(task);
+			} else {
+				continue;
+			}
+		}
+
+		if (bins.doable.length > 0) {
+			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
+			bins.doable.sort(
+				(a, b) =>
+					(a.file.frontmatter.priority -
+						b.file.frontmatter.priority) *
+					-1,
+			);
+			rs.push(["array", Renderer.basicTaskJournal, bins.doable]);
+		}
+
+		console.log(bins.waiting);
+		if (bins.waiting.length > 0) {
+			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
+			const buff = [];
+			for (const task of bins.waiting) {
+				const fm = task.file.frontmatter;
+				// if (fm.needs !== undefined && fm.needs.length > 0) {
+				// 	fm.cause = fm.needs;
+				// } else if (fm.after !== undefined) {
+				// 	fm.cause = `after: ${fm.after}`;
+				// } else {
+				// 	fm.cause = "unknown";
+				// }
+				fm.cause = "unknown";
+				buff.push(task);
+			}
+
+			rs.push(["array", Renderer.waitingTask, buff]);
+		}
+
+		return rs;
 	}
 
 	projectTasksSheetRelation(dv) {
@@ -3310,6 +3459,9 @@ export class ListMaker {
 
 		const logs = this.dv.pages(`"${Paths.Logs}"`).where((page) => {
 			if (page.type !== Types.Log) {
+				return false;
+			}
+			if (page.file.frontmatter.reviewed > 0) {
 				return false;
 			}
 			return true;
@@ -4616,6 +4768,40 @@ export class ListMaker {
 		return rs;
 	}
 
+	operations() {
+		const fm = this.frontmatter.getCurrentFrontmatter();
+		const filterBy = new FilterBy(fm);
+		const rs = [];
+		const pages = this.dv.pages(`"Operations"`).where((page) => {
+			const fmp = page.file.frontmatter;
+			// if (fmp.status !== "todo") {
+			// 	return false;
+			// }
+
+			return true;
+		});
+
+		const buff = [];
+		for (const page of pages) {
+			const p = new FrontmatterJS(page);
+			if (filterBy.filter(page.file.frontmatter)) {
+				continue;
+			}
+
+			buff.push(p);
+		}
+
+		buff.sort((a, b) => {
+			const dta = new Date(a.fm.before);
+			const dtb = new Date(b.fm.before);
+			return dta.getTime() - dtb.getTime();
+		});
+		rs.push(["header", 1, "Operations"]);
+		rs.push(["array", Renderer.readyTask, buff]);
+
+		return rs;
+	}
+	
 	journal() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, fmTasks] =
 			this.frontmatter.parseJournal();
