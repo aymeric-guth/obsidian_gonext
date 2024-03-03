@@ -1555,7 +1555,8 @@ export const Renderer = {
 
 	basicTaskJournal(dv, data) {
 		const buff = [];
-		const cols = ["journal", "uuid", "tasks", "estimate"];
+		// const cols = ["journal", "uuid", "tasks", "estimate"];
+		const cols = ["uuid", "tasks", "estimate"];
 		const journal = dv.pages(`"${Paths.Journal}"`).array()[0].file
 			.frontmatter.tasks;
 
@@ -1572,7 +1573,7 @@ export const Renderer = {
 				// console.log(`tasks: ${d.file.tasks.length}`)
 				// console.log(`tasksB: ${f.tasks.length}`)
 				buff.push([
-					journal.contains(fm.uuid) ? "->" : "\\-",
+					// journal.contains(fm.uuid) ? "->" : "\\-",
 					dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
 					dv.markdownTaskList(f.tasks),
 					fm.time_estimate,
@@ -3335,11 +3336,11 @@ export class ListMaker {
 		// rs.push(["header", 2, project.name]);
 
 		const bins = {
+			nextAction: [],
 			doable: [],
 			waiting: [],
 			journal: [],
 			maybe: [],
-			praxis: [],
 		};
 
 		const tasks = this.getProjectTasks(project.name);
@@ -3352,11 +3353,18 @@ export class ListMaker {
 			}
 
 			if (this.noteHelper.isDoable(task)) {
-				bins.doable.push(task);
+				if (fm.priority == 9) {
+					bins.nextAction.push(task);
+				} else if (fm.priority > 0) {
+					bins.doable.push(task);
+				} else {
+					bins.maybe.push(task);
+				}
 			} else if (fm.status === Status.Todo) {
 				bins.waiting.push(task);
+			} else if (fm.status === Status.Doing) {
 			} else {
-				bins.maybe.push(task);
+				throw new Error(`${fm.uuid}`);
 			}
 		}
 
@@ -3378,8 +3386,19 @@ export class ListMaker {
 			}
 		}
 		// groupBy layer, ??
-		if (bins.doable.length > 0) {
+		if (bins.nextAction.length > 0) {
 			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
+			bins.nextAction.sort(
+				(a, b) =>
+					(a.file.frontmatter.priority -
+						b.file.frontmatter.priority) *
+					-1,
+			);
+			rs.push(["array", Renderer.basicTaskJournal, bins.nextAction]);
+		}
+
+		if (bins.doable.length > 0) {
+			rs.push(["header", 2, `Doable (${bins.doable.length})`]);
 			bins.doable.sort(
 				(a, b) =>
 					(a.file.frontmatter.priority -
