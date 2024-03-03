@@ -4678,6 +4678,11 @@ export class ListMaker {
 	}
 
 	projects() {
+		let fml = this.frontmatter.getCurrentFrontmatter();
+		if (fml === undefined) {
+			fml = {inactive: []};
+		}
+
 		const rs = [];
 		const bins = {
 			active: [],
@@ -4714,10 +4719,11 @@ export class ListMaker {
 					return false;
 				});
 
-			if (tasks.length > 0) {
-				bins.active.push(project);
-			} else {
+
+			if (tasks.length == 0 || fml.inactive.contains(fmProject.getName())) {
 				bins.inactive.push(project);
+			} else {
+				bins.active.push(project);
 			}
 		}
 
