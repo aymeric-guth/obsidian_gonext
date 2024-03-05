@@ -69,6 +69,7 @@ class FrontmatterJS {
 	public names: string[];
 	public projects: string[];
 	public fm: any;
+	public contents: string[];
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
@@ -116,7 +117,7 @@ class FrontmatterJS {
 		Assert.True(this.fm !== undefined, "'fm' is undefined");
 		Assert.True(this.fm.uuid !== undefined, "'uuid' is undefined");
 		console.log(`uuid: ${this.fm.uuid}`);
-		Assert.True(this.fm.version !== undefined, "'version' is undefined");
+		// Assert.True(this.fm.version !== undefined, "'version' is undefined");
 		// Assert.True(fm.created_at !== undefined, "'created_at' is undefined");
 
 		this.uuid = this.fm.uuid;
@@ -132,6 +133,7 @@ class FrontmatterJS {
 		const projects = [];
 		const names = [];
 		const contexts = [];
+		const contents = [];
 
 		if (!Helper.nilCheck(this.fm.tags)) {
 			if (!Array.isArray(this.fm.tags)) {
@@ -150,6 +152,8 @@ class FrontmatterJS {
 					names.push(tag.slice(5));
 				} else if (tag.slice(0, 8) == "context/") {
 					contexts.push(tag.slice(8));
+				} else if (tag.slice(0, 8) == "content/") {
+					contents.push(tag.slice(8));
 				}
 			}
 		}
@@ -160,6 +164,8 @@ class FrontmatterJS {
 		this.plural(components, "components");
 		this.singular(projects, "project");
 		this.plural(projects, "projects");
+		this.singular(contents, "contents");
+		this.plural(contents, "contents");
 		this.singular(names, "name");
 		this.plural(names, "names");
 		this.plural(names, "alias");
@@ -169,6 +175,7 @@ class FrontmatterJS {
 		this.projects = projects;
 		this.names = names;
 		this.contexts = contexts;
+		this.contents = contents;
 	}
 
 	getDomain(emptyDefault = true): string {
@@ -203,7 +210,15 @@ class FrontmatterJS {
 		if (emptyDefault) {
 			return this.names[0];
 		} else {
-			return this.projects[0] === undefined ? "" : this.projects[0];
+			return this.names[0] === undefined ? "" : this.names[0];
+		}
+	}
+
+	getContent(emptyDefault = true): string {
+		if (emptyDefault) {
+			return this.contents[0];
+		} else {
+			return this.contents[0] === undefined ? "" : this.contents[0];
 		}
 	}
 
@@ -492,6 +507,9 @@ export const Helper = {
 	},
 
 	durationStringToSec(val) {
+		if (val === undefined || val.length === 0) {
+			return 0;
+		}
 		const mult = val.slice(-1);
 		let m = 0;
 		if (mult === "h") {
@@ -508,6 +526,7 @@ export const Helper = {
 		}
 
 		return m * parseInt(val.slice(0, -1));
+
 	},
 
 	msecToStringDuration(val: number): number {
@@ -1829,13 +1848,12 @@ export const Renderer = {
 		const cols = [
 			"taskId",
 			"logId",
-			"createdAt",
-			"doneAt",
+			// "createdAt",
+			// "doneAt",
 			"took",
-			"tookAcc",
-			"deltaAcc",
+			// "tookAcc",
 			"project",
-			"domain",
+			// "domain",
 		];
 		dv.table(cols, data);
 	},
@@ -2261,8 +2279,6 @@ export class ListMaker {
 
 		for (const a of ns) {
 			const root = a.split("/");
-			console.log(`a: '${a}'`);
-			console.log(`root: '${root}'`);
 			Assert.True(root.length === 2, `Invalid tag: '${a}'`);
 			const parent =
 				root[0].slice(0, 1) === "!" ? root[0].slice(1) : root[0];
@@ -4120,6 +4136,166 @@ export class ListMaker {
 		return rs;
 	}
 
+	logs() {
+		const [groupBy, filterBy, before, after] =
+			this.frontmatter.parseAllProgressedTasks();
+
+		const tasks = this.dv.pages(`"${Paths.Tasks}"`).where((page) => page.file.frontmatter.status !== "doing");
+
+		const buff = [];
+		for (const task of tasks) {
+			const fm = task.file.frontmatter;
+			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
+				continue;
+			}
+
+			const timeEstimate = Helper.durationStringToSec(fm.time_estimate);
+			if (timeEstimate === undefined && fm.time_estimate !== undefined) {
+				throw new Error(
+					`Invalid value: "${fm.time_estimate}" for entry: "${fm.uuid}"`,
+				);
+			} else {
+				fm.timeEstimate = timeEstimate;
+			}
+
+			const logs = this.dv
+				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((page) => page.type === Types.Log)
+				.sort((k) => k.created_at, "asc");
+
+			// discard tasks without log entry
+			if (logs.length < 1) {
+				continue;
+			}
+
+			fm.took = 0;
+			const project = Helper.getField(Helper.getProject(fm, true), "");
+			const area = Helper.getField(Helper.getArea(fm, true), "");
+
+			for (const log of logs) {
+				const fml = log.file.frontmatter;
+				const entry = {
+					alias: fm.alias,
+					uuid: fm.uuid,
+					logId: fml.uuid,
+					estimate: fm.timeEstimate,
+					project: project,
+					area: area,
+					domain: Helper.getField(Helper.getDomain(fm, true), ""),
+					path: task.file.path,
+					logPath: log.file.path,
+				};
+				if (fml.created_at === undefined) {
+					console.log(log);
+					throw new Error(
+						`task: ${fm.uuid} last entry is missing 'created_at' field`,
+					);
+				}
+
+				if (fml.done_at === undefined) {
+					console.log(log);
+					throw new Error(
+						`task: ${fm.uuid} last entry is missing 'done_at' field`,
+					);
+				}
+
+				entry.createdAt = new Date(fml.created_at);
+				entry.doneAt = new Date(fml.done_at);
+				if (!this.filterByDate(entry.doneAt, before, after)) {
+					continue;
+				}
+
+				const took =
+					(entry.doneAt.getTime() - entry.createdAt.getTime()) / 1000;
+				fm.took += took;
+				entry.took = took;
+				entry.tookAcc = fm.took;
+				entry.deltaAcc = timeEstimate - fm.took;
+				buff.push(entry);
+			}
+		}
+
+		const keyGetter = Helper.getKey(groupBy);
+		const bins = {};
+		for (const entry of buff) {
+			let d = undefined;
+
+			try {
+				d = keyGetter(entry);
+			} catch {
+				console.log(entry);
+				throw new Error(entry);
+			}
+
+			if (bins[d] === undefined) {
+				bins[d] = [entry];
+			} else {
+				bins[d].push(entry);
+			}
+		}
+
+		const keys = Object.keys(bins);
+		keys.sort();
+
+		// builds rendering array
+		const rs = [];
+		for (const key of keys.reverse()) {
+			rs.push(["header", 2, key]);
+			const arr = [];
+			let totalTime = 0;
+
+			// day loop
+			for (const e of bins[key]) {
+				const buff = [];
+				buff.push(
+					this.dv.sectionLink(
+						e.path,
+						"Task",
+						false,
+						`${e.uuid.slice(0, 8)}`,
+					),
+				);
+				// buff.push(e.alias !== undefined ? e.alias : "");
+				buff.push(
+					this.dv.sectionLink(
+						e.logPath,
+						"Content",
+						false,
+						`${e.logId.slice(0, 8)}`,
+					),
+				);
+
+				// buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
+				// buff.push(`${e.doneAt.toISOString().slice(0, 16)}`);
+
+				const convertSecondsToHours = (t) => {
+					return Math.round((t / 3600) * 10) / 10;
+				};
+				buff.push(`${convertSecondsToHours(e.took)}`);
+				buff.push(`${e.project}`);
+
+				arr.push(buff);
+				totalTime += e.took;
+			}
+
+			// task
+			totalTime = Math.round((totalTime / 3600) * 10) / 10;
+			rs.push(["stats", "totalTime", "h", totalTime]);
+			rs.push(["array", Renderer.basicProgressedTaskWithLog, arr]);
+		}
+
+		return rs;
+	}
+
+	logsHandler() {
+		return this.logs()
+		// try {
+		// } catch {
+		// 	throw new Error("Unspecified error occured");
+		// }
+	}
+
+
 	allProgressedTasks() {
 		const [groupBy, filterBy, before, after] =
 			this.frontmatter.parseAllProgressedTasks();
@@ -4249,8 +4425,17 @@ export class ListMaker {
 						`${e.logId.slice(0, 8)}`,
 					),
 				);
-				buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
-				buff.push(`${e.doneAt.toISOString().slice(0, 16)}`);
+				try {
+					buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
+				} catch {
+					throw new Error(`Invalid 'created_at': '${e.uuid}'`);
+				}
+
+				try {
+					buff.push(`${e.doneAt.toISOString().slice(0, 16)}`);
+				} catch {
+					throw new Error(`Invalid 'done_at': '${e.uuid}'`);
+				}
 				const convertSecondsToHours = (t) => {
 					return Math.round((t / 3600) * 10) / 10;
 				};
@@ -4271,56 +4456,6 @@ export class ListMaker {
 			totalTime = Math.round((totalTime / 3600) * 10) / 10;
 			rs.push(["stats", "totalTime", "h", totalTime]);
 		}
-
-		return rs;
-	}
-
-	yesterday() {
-		const tasks = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where((p) => p.status === Status.Done);
-		const rs = [];
-		const buff = [];
-		// lower bound (upper bound - 24h) | now | upper bound (lower bound - 24h)
-		// '2024-01-06T05:32:14.360Z'
-		const now = new Date();
-		const prev = new Date(now - 3600 * 1000 * 24);
-		prev.setHours(4);
-		prev.setMinutes(0);
-		prev.setSeconds(0);
-		prev.setMilliseconds(0);
-		const lowerBound = prev;
-		const upperBound = now;
-
-		for (const task of tasks) {
-			const fm = task.file.frontmatter;
-			const logs = this.dv
-				.pages(`"${Paths.Logs}/${fm.uuid}"`)
-				.where((page) => {
-					const fml = page.file.frontmatter;
-					if (fml.done_at === undefined) {
-						return false;
-					}
-					const doneAt = new Date(fml.done_at);
-					// console.log(doneAt);
-					if (doneAt > lowerBound && doneAt < upperBound) {
-						return true;
-					}
-					return false;
-				})
-				.sort((k) => k.created_at, "asc");
-
-			if (logs.length < 1) {
-				continue;
-			}
-
-			for (const entry of logs) {
-				buff.push(entry);
-			}
-		}
-
-		rs.push(["header", 1, "Yesterday"]);
-		rs.push(["array", Renderer.taskDoneWithLogs, buff]);
 
 		return rs;
 	}
@@ -4720,7 +4855,15 @@ export class ListMaker {
 				});
 
 
-			if (tasks.length == 0 || fml.inactive.contains(fmProject.getName())) {
+			let nextActionCount = 0;
+			for (const task of tasks) {
+				// console.log(task.file.frontmatter.priority);
+				if (task.file.frontmatter.priority === 9) {
+					nextActionCount++;
+				}
+			}
+
+			if (tasks.length === 0 || nextActionCount === 0 || fml.inactive.contains(fmProject.getName())) {
 				bins.inactive.push(project);
 			} else {
 				bins.active.push(project);
@@ -5036,5 +5179,74 @@ export class ListMaker {
 		}
 
 		return arr;
+	}
+
+	library() {
+		const rs = [];
+		const domains = [];
+		const refDomains = [];
+
+		{
+			const pages = this.dv
+				.pages(`"${Paths.Domains}"`)
+				.sort((k) => k.name, "asc")
+				.array();
+
+			for (const page of pages) {
+				const fm = new FrontmatterJS(page);
+				fm.resolve(this.dv);
+				domains.push(fm.getName());
+			}
+		}
+
+		{
+			for (const domain of domains) {
+				rs.push(["header", 2, `${domain}`]);
+				const pages = this.dv.pages(`"802 Refs"`).where((page) => {
+					const fm = new FrontmatterJS(page);
+					// const fm = page.file.frontmatter;
+					const content = fm.getContent();
+					if (content === "person" || content === "place") {
+						return false;
+					}
+
+					if (!domains.contains(fm.getDomain(false))) {
+						if (!refDomains.contains(fm.getDomain(false))) {
+							refDomains.push(fm.getDomain(false));
+						}
+					}
+
+					return fm.getDomain(false) === domain;
+				});
+
+				rs.push(["array", Renderer.knowledgeBase, pages]);
+			}
+
+			{
+				if (refDomains.length === 0) {
+					return rs;
+				}
+
+				rs.push(["header", 2, "undeclared domains"]);
+				for (const domain of refDomains) {
+					rs.push(["header", 3, domain]);
+					const pages = this.dv.pages(`"802 Refs"`).where((page) => {
+						const fm = new FrontmatterJS(page);
+						// const fm = page.file.frontmatter;
+						const content = fm.getContent();
+						if (content === "person" || content === "place") {
+							return false;
+						}
+
+						return fm.getDomain(false) === domain;
+					});
+
+					rs.push(["array", Renderer.knowledgeBase, pages]);
+				}
+
+			}
+		}
+
+		return rs;
 	}
 }
