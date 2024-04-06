@@ -70,6 +70,8 @@ class FrontmatterJS {
 	public projects: string[];
 	public fm: any;
 	public contents: string[];
+	public traits: string[];
+	public contexts: string[];
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
@@ -127,6 +129,7 @@ class FrontmatterJS {
 		this.domains = [];
 		this.projects = [];
 		this.contexts = [];
+		this.traits = [];
 
 		const domains = [];
 		const components = [];
@@ -134,6 +137,7 @@ class FrontmatterJS {
 		const names = [];
 		const contexts = [];
 		const contents = [];
+		const traits = [];
 
 		if (!Helper.nilCheck(this.fm.tags)) {
 			if (!Array.isArray(this.fm.tags)) {
@@ -154,6 +158,8 @@ class FrontmatterJS {
 					contexts.push(tag.slice(8));
 				} else if (tag.slice(0, 8) == "content/") {
 					contents.push(tag.slice(8));
+				} else if (tag.slice(0, 6) == "trait/") {
+					traits.push(tag.slice(6));
 				}
 			}
 		}
@@ -169,6 +175,8 @@ class FrontmatterJS {
 		this.singular(names, "name");
 		this.plural(names, "names");
 		this.plural(names, "alias");
+		this.singular(traits, "trait");
+		this.plural(traits, "traits");
 
 		this.domains = domains;
 		this.components = components;
@@ -176,6 +184,7 @@ class FrontmatterJS {
 		this.names = names;
 		this.contexts = contexts;
 		this.contents = contents;
+		this.traits = traits;
 	}
 
 	getDomain(emptyDefault = true): string {
@@ -188,6 +197,10 @@ class FrontmatterJS {
 
 	getDomains(): string[] {
 		return this.domains;
+	}
+
+	getTraits(): string[] {
+		return this.traits;
 	}
 
 	getComponents(): string[] {
@@ -987,6 +1000,56 @@ export const AutoField = {
 	resource(dv) {
 		return AutoField.permanent(dv);
 	},
+
+	generic(dv) {
+		const current = dv.current();
+		const fm = new FrontmatterJS(current);
+
+		// context analysis
+		const path = fm.f.path;
+		const dirname = path.split("/")[0];
+		if (dirname === undefined) {
+			throw new Error("unexpected error");
+		}
+
+		if (dirname === Paths.Tasks) {
+			// Actionable
+			console.log(dirname);
+		} else if (dirname == Paths.Inbox) {
+		} else {
+			// Knowledgeable
+			return;
+			throw new Error("not implemented");
+		}
+		//
+
+		const links = [];
+		for (const trait of fm.getTraits()) {
+			if (trait.slice(0, 4) === "link") {
+				links.push(trait.slice(5));
+			}
+		}
+
+		const refs = [];
+		for (const link of links) {
+			const pages = dv
+				.pages()
+				.where((page) => page.file.frontmatter.uuid === link);
+
+			if (pages.length === 1) {
+				refs.push(pages[0]);
+			} else {
+				console.warn(`referencing unkown resource: '${link}'`);
+			}
+		}
+
+		if (refs.length > 0) {
+			dv.header(2, "refs");
+			for (const ref of refs) {
+				dv.paragraph(Renderer.makeLinkAlias(dv, ref.file));
+			}
+		}
+	}
 };
 
 // this must be called from `dataviewjs` codeblocks
@@ -3841,67 +3904,6 @@ export class ListMaker {
 		return rs;
 	}
 
-	allMaybeProjects() {
-		const [byAreas, byContexts, byLayers, byOrgs, byProjects, minPriority] =
-			this.frontmatter.parseTodoList();
-		const fml = this.frontmatter.getCurrentFrontmatter();
-		if (fml === undefined) {
-			throw new Error(`Invalid frontmatter, cannot proceed`);
-		}
-
-		// undefined | null, empty arr, arr 1+ valeurs str
-		const filterBy = fml.filter_by;
-
-		// undefined, null || string || empty arr || arr.len 1+[str]
-		let groupBy = fml.group_by;
-		if (typeof groupBy === "undefined" || groupBy === "") {
-			groupBy = "";
-		} else if (typeof groupBy === "string") {
-		} else {
-			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
-		}
-
-		const projects = this.noteHelper.getNamespaceContent(Namespace.Project);
-		projects.sort();
-		const rs = [];
-		const bins = {};
-		rs.push(["header", 1, "Maybe"]);
-
-		const tasks = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where((page) => page.status === Status.Maybe);
-
-		for (const task of tasks) {
-			const fm = task.file.frontmatter;
-			if (
-				filterBy !== undefined &&
-				filterBy !== null &&
-				filterBy.length > 0
-			) {
-				if (!this.nameInNamespace(fm, filterBy)) {
-					continue;
-				}
-			}
-			const project = Helper.getProject(fm);
-			const area = Helper.getArea(fm);
-
-			if (bins[project] === undefined) {
-				bins[project] = [task];
-			} else {
-				bins[project].push(task);
-			}
-		}
-
-		const keys = Object.keys(bins);
-		keys.sort();
-		for (const project of keys) {
-			if (bins[project].length > 0) {
-				rs.push(["header", 2, project]);
-				rs.push(["array", Renderer.readyTask, bins[project]]);
-			}
-		}
-		return rs;
-	}
 
 	allTodoProjects() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, minPriority] =
@@ -4020,121 +4022,6 @@ export class ListMaker {
 		return rs;
 	}
 
-	allDoneTaskWithoutLog() {
-		const [
-			byAreas,
-			byContexts,
-			byLayers,
-			byOrgs,
-			byProjects,
-			fields,
-			stats,
-			before,
-			after,
-		] = this.frontmatter.parseDoneList();
-
-		const tasks = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where((t) => t.status === Status.Done && t.type === 3);
-
-		const buff = [];
-		for (const task of tasks) {
-			const fm = task.file.frontmatter;
-
-			const entry = {
-				path: task.file.path,
-				uuid: fm.uuid,
-			};
-			if (
-				!this.filterByNamespace(
-					fm,
-					byAreas,
-					byContexts,
-					byLayers,
-					byOrgs,
-					byProjects,
-				)
-			) {
-				continue;
-			}
-
-			if (fm.created_at === undefined) {
-				throw new Error(
-					`task: ${fm.uuid} last entry is missing 'done_at' field`,
-				);
-			}
-
-			entry.createdAt = new Date(fm.created_at);
-			if (!this.filterByDate(entry.createdAt, before, after)) {
-				continue;
-			}
-
-			const logs = this.dv
-				.pages(`"${Paths.Logs}/${fm.uuid}"`)
-				.sort((k) => k.created_at, "asc");
-			// discard tasks with log entry
-			if (logs.length > 0) {
-				continue;
-			}
-
-			let project = Helper.getProject(fm, true);
-			if (project === undefined) {
-				project = "";
-			}
-			let area = Helper.getArea(fm, true);
-			if (area === undefined) {
-				area = "";
-			}
-			entry.project = project;
-			entry.domain = Helper.getField(Helper.getDomain(fm, true), "");
-
-			buff.push(entry);
-		}
-
-		const bins = {};
-		for (const entry of buff) {
-			const createdAt = entry.createdAt;
-			const d = createdAt.toISOString().slice(0, 10);
-			if (bins[d] === undefined) {
-				bins[d] = [entry];
-			} else {
-				bins[d].push(entry);
-			}
-		}
-
-		const keys = Object.keys(bins);
-		keys.sort();
-
-		// builds rendering array
-		const rs = [];
-		for (const key of keys.reverse()) {
-			rs.push(["header", 3, key]);
-			const arr = [];
-
-			// day loop
-			for (const e of bins[key]) {
-				const buff = [];
-				buff.push(
-					this.dv.sectionLink(
-						e.path,
-						"Task",
-						false,
-						`${e.uuid.slice(0, 8)}`,
-					),
-				);
-				buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
-				buff.push(`${e.project}`);
-				buff.push(`${e.domain}`);
-				arr.push(buff);
-			}
-
-			// task
-			// ["taskId", "createdAt", "project", "area"]
-			rs.push(["array", Renderer.basicDoneTaskWithoutLogs, arr]);
-		}
-
-		return rs;
-	}
 
 	logs() {
 		const [groupBy, filterBy, before, after] =
@@ -4282,316 +4169,6 @@ export class ListMaker {
 			totalTime = Math.round((totalTime / 3600) * 10) / 10;
 			rs.push(["stats", "totalTime", "h", totalTime]);
 			rs.push(["array", Renderer.basicProgressedTaskWithLog, arr]);
-		}
-
-		return rs;
-	}
-
-	logsHandler() {
-		return this.logs()
-		// try {
-		// } catch {
-		// 	throw new Error("Unspecified error occured");
-		// }
-	}
-
-
-	allProgressedTasks() {
-		const [groupBy, filterBy, before, after] =
-			this.frontmatter.parseAllProgressedTasks();
-		const tasks = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where(
-				(page) =>
-					(page.status === Status.Todo ||
-						page.status === Status.Maybe ||
-						page.status === Status.Standby) &&
-					(page.type === Types.Task ||
-						page.type === Types.Praxis ||
-						page.type === Types.Media),
-			);
-
-		const buff = [];
-		for (const task of tasks) {
-			const fm = task.file.frontmatter;
-			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
-				continue;
-			}
-
-			const timeEstimate = Helper.durationStringToSec(fm.time_estimate);
-			if (timeEstimate === undefined && fm.time_estimate !== undefined) {
-				throw new Error(
-					`Invalid value: "${fm.time_estimate}" for entry: "${fm.uuid}"`,
-				);
-			} else {
-				fm.timeEstimate = timeEstimate;
-			}
-
-			const logs = this.dv
-				.pages(`"${Paths.Logs}/${fm.uuid}"`)
-				.where((page) => page.type === Types.Log)
-				.sort((k) => k.created_at, "asc");
-
-			// discard tasks without log entry
-			if (logs.length < 1) {
-				continue;
-			}
-
-			fm.took = 0;
-			const project = Helper.getField(Helper.getProject(fm, true), "");
-			const area = Helper.getField(Helper.getArea(fm, true), "");
-
-			for (const log of logs) {
-				const fml = log.file.frontmatter;
-				const entry = {
-					alias: fm.alias,
-					uuid: fm.uuid,
-					logId: fml.uuid,
-					estimate: fm.timeEstimate,
-					project: project,
-					area: area,
-					domain: Helper.getField(Helper.getDomain(fm, true), ""),
-					path: task.file.path,
-					logPath: log.file.path,
-				};
-				if (fml.created_at === undefined) {
-					console.log(log);
-					throw new Error(
-						`task: ${fm.uuid} last entry is missing 'created_at' field`,
-					);
-				}
-
-				if (fml.done_at === undefined) {
-					console.log(log);
-					throw new Error(
-						`task: ${fm.uuid} last entry is missing 'done_at' field`,
-					);
-				}
-
-				entry.createdAt = new Date(fml.created_at);
-				entry.doneAt = new Date(fml.done_at);
-				if (!this.filterByDate(entry.doneAt, before, after)) {
-					continue;
-				}
-
-				const took =
-					(entry.doneAt.getTime() - entry.createdAt.getTime()) / 1000;
-				fm.took += took;
-				entry.took = took;
-				entry.tookAcc = fm.took;
-				entry.deltaAcc = timeEstimate - fm.took;
-				buff.push(entry);
-			}
-		}
-
-		const keyGetter = Helper.getKey(groupBy);
-		const bins = {};
-		for (const entry of buff) {
-			const d = keyGetter(entry);
-			if (bins[d] === undefined) {
-				bins[d] = [entry];
-			} else {
-				bins[d].push(entry);
-			}
-		}
-
-		const keys = Object.keys(bins);
-		keys.sort();
-
-		// builds rendering array
-		const rs = [];
-		for (const key of keys.reverse()) {
-			rs.push(["header", 2, key]);
-			const arr = [];
-			let totalTime = 0;
-
-			// day loop
-			for (const e of bins[key]) {
-				const buff = [];
-				buff.push(
-					this.dv.sectionLink(
-						e.path,
-						"Task",
-						false,
-						`${e.uuid.slice(0, 8)}`,
-					),
-				);
-				// buff.push(e.alias !== undefined ? e.alias : "");
-				buff.push(
-					this.dv.sectionLink(
-						e.logPath,
-						"Content",
-						false,
-						`${e.logId.slice(0, 8)}`,
-					),
-				);
-				try {
-					buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
-				} catch {
-					throw new Error(`Invalid 'created_at': '${e.uuid}'`);
-				}
-
-				try {
-					buff.push(`${e.doneAt.toISOString().slice(0, 16)}`);
-				} catch {
-					throw new Error(`Invalid 'done_at': '${e.uuid}'`);
-				}
-				const convertSecondsToHours = (t) => {
-					return Math.round((t / 3600) * 10) / 10;
-				};
-				buff.push(`${convertSecondsToHours(e.took)}`);
-				buff.push(`${convertSecondsToHours(e.tookAcc)}`);
-				buff.push(`${convertSecondsToHours(e.deltaAcc)}`);
-				buff.push(`${e.project}`);
-				// buff.push(`${e.area}`);
-				buff.push(`${e.domain}`);
-
-				arr.push(buff);
-				totalTime += e.took;
-			}
-
-			// task
-			// ["uuid", "logId", "createdAt", "doneAt", "took", "tookAcc", "deltaAcc", "project", "area"]
-			rs.push(["array", Renderer.basicProgressedTaskWithLog, arr]);
-			totalTime = Math.round((totalTime / 3600) * 10) / 10;
-			rs.push(["stats", "totalTime", "h", totalTime]);
-		}
-
-		return rs;
-	}
-
-	allDoneTasks() {
-		const [groupBy, filterBy, before, after] =
-			this.frontmatter.parseAllDoneTasks();
-		const tasks = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where((p) => p.status === Status.Done);
-
-		const buff = [];
-		for (const task of tasks) {
-			const fm = task.file.frontmatter;
-			if (filterBy.length > 0 && !this.nameInNamespace(fm, filterBy)) {
-				continue;
-			}
-
-			const logs = this.dv
-				.pages(`"${Paths.Logs}/${fm.uuid}"`)
-				.sort((k) => k.created_at, "asc");
-
-			if (logs.length < 1) {
-				// console.warn(`task: ${fm.uuid} has no Logs`);
-				// throw new Error(`task: ${taskId} has no Logs`);
-				continue;
-			}
-
-			fm.took = 0;
-			for (const log of logs) {
-				const fml = log.file.frontmatter;
-				const createdAt = new Date(fml.created_at);
-
-				if (createdAt === undefined) {
-					throw new Error(
-						`task: ${fm.uuid} last entry is missing 'created_at' field`,
-					);
-				}
-
-				const doneAt = new Date(fml.done_at);
-				if (doneAt === undefined) {
-					throw new Error(
-						`task: ${fm.uuid} last entry is missing 'done_at' field`,
-					);
-				}
-
-				fm.took += (doneAt.getTime() - createdAt.getTime()) / 1000;
-			}
-			const firstEntry = logs[0];
-			if (firstEntry === undefined) {
-				throw new Error(`Programming error 'firstEntry' is undefined`);
-			}
-
-			const lastEntry = logs[logs.length - 1];
-			if (lastEntry === undefined) {
-				throw new Error(`Programming error 'firstEntry' is undefined`);
-			}
-
-			fm.doneAt = new Date(lastEntry.file.frontmatter.created_at);
-			fm.createdAt = new Date(lastEntry.file.frontmatter.done_at);
-			fm.timeEstimate = Helper.durationStringToSec(fm.time_estimate);
-
-			if (!this.filterByDate(fm.doneAt, before, after)) {
-				continue;
-			}
-
-			buff.push(task);
-		}
-
-		const keyGetter = Helper.getKeyFuck(groupBy);
-		const bins = {};
-		for (const entry of buff) {
-			const d = keyGetter(entry);
-			if (bins[d] === undefined) {
-				bins[d] = [entry];
-			} else {
-				bins[d].push(entry);
-			}
-		}
-
-		const keys = Object.keys(bins);
-		keys.sort();
-
-		const rs = [];
-		for (const key of keys.reverse()) {
-			rs.push(["header", 2, key]);
-			const arr = [];
-			let totalTime = 0;
-
-			for (const e of bins[key]) {
-				const buff = [];
-				const fm = e.file.frontmatter;
-				buff.push(
-					this.dv.sectionLink(
-						e.file.path,
-						"Task",
-						false,
-						`${fm.uuid.slice(0, 8)}`,
-					),
-				);
-				try {
-					buff.push(`${fm.createdAt.toISOString().slice(0, 16)}`);
-					buff.push(`${fm.doneAt.toISOString().slice(0, 16)}`);
-				} catch {
-					console.log(fm);
-				}
-				buff.push(`${fm.timeEstimate}`);
-				buff.push(`${fm.took}`);
-				let delta = 0;
-				if (fm.timeEstimate !== undefined) {
-					delta = fm.timeEstimate - fm.took;
-				} else {
-					delta = undefined;
-				}
-				buff.push(delta);
-				let project = Helper.getProject(fm, true);
-				if (project === undefined) {
-					project = "";
-				}
-				buff.push(project);
-				let area = Helper.getDomain(fm, true);
-				if (area === undefined) {
-					area = "";
-				}
-				buff.push(area);
-
-				arr.push(buff);
-				totalTime += fm.took;
-			}
-
-			// task
-			// createdAt, doneAt, uuid, estimate, took, area, project, logEntries
-			// JSON.parse(JSON.stringify(buff))
-			rs.push(["array", Renderer.basicDoneTaskWithLogs, arr]);
-			totalTime = Math.round((totalTime / 3600) * 10) / 10;
-			rs.push(["stats", "totalTime", "h", totalTime]);
 		}
 
 		return rs;
@@ -4761,6 +4338,16 @@ export class ListMaker {
 	domains() {
 		const pages = this.dv
 			.pages(`"${Paths.Domains}"`)
+			.where((page) => {
+				const fm = page.file.frontmatter;
+				if (fm.name === undefined) {
+					return false;
+				}
+				if (this.dv.pages(`#domain/${fm.name}`).array().length <= 0) {
+					return false;
+				}
+				return true;
+			})
 			.sort((k) => k.name, "asc")
 			.array();
 		const rs = [];
