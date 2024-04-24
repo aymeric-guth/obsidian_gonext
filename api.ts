@@ -64,6 +64,7 @@ class FrontmatterJS {
 	public uuid: string;
 	public version: string;
 	public createdAt: Date;
+	public at: Date;
 	public components: string[];
 	public domains: string[];
 	public names: string[];
@@ -125,6 +126,7 @@ class FrontmatterJS {
 		this.uuid = this.fm.uuid;
 		this.version = this.fm.version;
 		this.createdAt = new Date(this.fm.created_at);
+		this.at = new Date(this.fm.at);
 		this.components = [];
 		this.domains = [];
 		this.projects = [];
@@ -539,7 +541,6 @@ export const Helper = {
 		}
 
 		return m * parseInt(val.slice(0, -1));
-
 	},
 
 	msecToStringDuration(val: number): number {
@@ -1049,7 +1050,7 @@ export const AutoField = {
 				dv.paragraph(Renderer.makeLinkAlias(dv, ref.file));
 			}
 		}
-	}
+	},
 };
 
 // this must be called from `dataviewjs` codeblocks
@@ -1077,6 +1078,10 @@ export const Renderer = {
 			false,
 			`${f.frontmatter.uuid.slice(0, 8)}`,
 		);
+	},
+
+	makeLink(dv, f, name = undefined, anchor = "Content") {
+		return dv.sectionLink(f.path, anchor, false, name);
 	},
 
 	projectLogs(dv, data) {
@@ -1920,6 +1925,15 @@ export const Renderer = {
 		];
 		dv.table(cols, data);
 	},
+
+	// dailyTask(dv, data) {
+	// 	Renderer.makeLinkShortUUID(this.dv, page.file),
+	// 	dv.
+	// 				rs.push([
+	// 					"paragraph",
+	// 					Renderer.makeLinkShortUUID(this.dv, page.file),
+	// 				]);
+	// }
 
 	do(dv, rs) {
 		for (const row of rs) {
@@ -3904,7 +3918,6 @@ export class ListMaker {
 		return rs;
 	}
 
-
 	allTodoProjects() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, minPriority] =
 			this.frontmatter.parseTodoList();
@@ -4022,12 +4035,13 @@ export class ListMaker {
 		return rs;
 	}
 
-
 	logs() {
 		const [groupBy, filterBy, before, after] =
 			this.frontmatter.parseAllProgressedTasks();
 
-		const tasks = this.dv.pages(`"${Paths.Tasks}"`).where((page) => page.file.frontmatter.status !== "doing");
+		const tasks = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => page.file.frontmatter.status !== "doing");
 
 		const buff = [];
 		for (const task of tasks) {
@@ -4402,7 +4416,7 @@ export class ListMaker {
 	projects() {
 		let fml = this.frontmatter.getCurrentFrontmatter();
 		if (fml === undefined) {
-			fml = {inactive: []};
+			fml = { inactive: [] };
 		}
 
 		const rs = [];
@@ -4441,7 +4455,6 @@ export class ListMaker {
 					return false;
 				});
 
-
 			let nextActionCount = 0;
 			for (const task of tasks) {
 				// console.log(task.file.frontmatter.priority);
@@ -4450,7 +4463,11 @@ export class ListMaker {
 				}
 			}
 
-			if (tasks.length === 0 || nextActionCount === 0 || fml.inactive.contains(fmProject.getName())) {
+			if (
+				tasks.length === 0 ||
+				nextActionCount === 0 ||
+				fml.inactive.contains(fmProject.getName())
+			) {
 				bins.inactive.push(project);
 			} else {
 				bins.active.push(project);
@@ -4556,7 +4573,7 @@ export class ListMaker {
 
 		return rs;
 	}
-	
+
 	journal() {
 		const [byAreas, byContexts, byLayers, byOrgs, byProjects, fmTasks] =
 			this.frontmatter.parseJournal();
@@ -4830,10 +4847,101 @@ export class ListMaker {
 
 					rs.push(["array", Renderer.knowledgeBase, pages]);
 				}
-
 			}
 		}
 
 		return rs;
+	}
+
+	planning() {
+		const rs = [];
+		const pages = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => {
+				const fm = new FrontmatterJS(page);
+				if (fm.at === undefined) {
+					return false;
+				}
+
+				if (fm.getProject() !== "daily") {
+					return false;
+				}
+
+				return true;
+			})
+			.sort((page) => page.file.frontmatter.at, "desc");
+
+		const bins = {};
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			let at = undefined;
+			try {
+				at = fm.at.toISOString().slice(0, 10);
+			} catch {
+				throw new Error(`Invalid date: '${fm.fm.uuid}'`);
+			}
+
+			const weekNumber = this.getWeekNumber(fm.at);
+			if (bins[weekNumber] === undefined) {
+				bins[weekNumber] = [fm];
+			} else {
+				bins[weekNumber].push(fm);
+			}
+		}
+
+		for (const key of Object.keys(bins)) {
+			rs.push(["header", 2, `week ${key}`]);
+			bins[key].sort((a, b) => {
+				return a.at.getTime() - b.at.getTime();
+			});
+
+			for (const task of bins[key]) {
+				const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+					task.at.getDay()
+				];
+				console.log(task.at.getDay());
+				try {
+					rs.push([
+						"paragraph",
+						Renderer.makeLink(
+							this.dv,
+							task.f,
+							`${task.at.toISOString().slice(0, 10)}, ${day}`,
+							"daily",
+						),
+					]);
+				} catch {
+					rs.push(["paragraph", 
+						Renderer.makeLink(
+							this.dv,
+							task.f,
+							undefined,
+							"daily",
+						),
+					])
+				}
+			}
+		}
+
+		return rs;
+	}
+
+	dayOfYear(year: number, month: number, day: number): number {
+		const N1 = Math.floor((275 * month) / 9);
+		const N2 = Math.floor((month + 9) / 12);
+		const N3 = 1 + Math.floor((year - 4 * Math.floor(year / 4) + 2) / 3);
+		return N1 - N2 * N3 + day - 30;
+	}
+
+	getWeekNumber(d) {
+		// Copy date so don't modify original
+		d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+		// Set to nearest Thursday: current date + 4 - current day number
+		// Make Sunday's day number 7
+		d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+		// Get first day of year
+		const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+		// Calculate full weeks to nearest Thursday
+		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 	}
 }
