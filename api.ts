@@ -649,7 +649,8 @@ export const AutoField = {
 			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
 			if (totalTime > 0) {
 				dv.paragraph(
-					`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					`_totalTime (h):_ ${
+						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
 					}`,
 				);
 			}
@@ -1051,6 +1052,43 @@ export const AutoField = {
 			}
 		}
 	},
+
+	daily(dv) {
+		const current = dv.current().file.frontmatter;
+		const currentAt = new Date(current.at);
+		const currentAtShort = currentAt.toISOString().slice(0, 10);
+
+		const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			if (page.file.frontmatter.at === undefined) {
+				return false;
+			}
+
+			const fm = new FrontmatterJS(page);
+			if (current.uuid === fm.uuid) {
+				return false;
+			}
+
+			if (fm.at.toISOString().slice(0, 10) === currentAtShort) {
+				return true;
+			}
+		});
+
+    if (pages.length === 0) {
+      return;
+    }
+
+    const buff = [];
+		for (const page of pages) {
+      const fm = new FrontmatterJS(page);
+      const h = String(fm.at.getHours()).padStart(2, "0");
+      const m = String(fm.at.getMinutes()).padStart(2, "0");
+      buff.push([
+        Renderer.makeLinkShortUUID(dv, page.file, "Task"),
+        `${h}:${m}`,
+      ]);
+		}
+		dv.table(["uuid", "at"], buff);
+	},
 };
 
 // this must be called from `dataviewjs` codeblocks
@@ -1255,13 +1293,13 @@ export const Renderer = {
 					fm.components.length === 0
 						? "\\-"
 						: ((components) => {
-							const buff = [];
+								const buff = [];
 
-							for (const component of components) {
-								buff.push(component.slice(10));
-							}
-							return buff.join("<br>");
-						})(Helper.getComponents(fm)),
+								for (const component of components) {
+									buff.push(component.slice(10));
+								}
+								return buff.join("<br>");
+							})(Helper.getComponents(fm)),
 			};
 
 			if (record.type === "log") {
@@ -1790,7 +1828,8 @@ export const Renderer = {
 			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
 			if (totalTime > 0) {
 				dv.paragraph(
-					`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					`_totalTime (h):_ ${
+						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
 					}`,
 				);
 			}
@@ -3151,8 +3190,9 @@ export class ListMaker {
 
 					if (fragments.length > 1) {
 						for (const fragment of fragments) {
-							const key = `component/${component}${fragment === "" ? "" : "/" + fragment
-								}`;
+							const key = `component/${component}${
+								fragment === "" ? "" : "/" + fragment
+							}`;
 							rs.push(["paragraph", `#${key}`]);
 							const tasks = bins[domain][key];
 							if (tasks !== undefined) {
@@ -3473,7 +3513,8 @@ export class ListMaker {
 			if (toReview > 0) {
 				rs.push([
 					"paragraph",
-					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
+					`[[${Paths.Projects}/${
+						project.name === "adhoc" ? "ad hoc" : project.name
 					}/logs]]`,
 				]);
 			}
@@ -3540,7 +3581,8 @@ export class ListMaker {
 				}
 				if (
 					Helper.getProject(fm) !==
-					`${Namespace.Project}/${project.name === "adhoc" ? "none" : project.name
+					`${Namespace.Project}/${
+						project.name === "adhoc" ? "none" : project.name
 					}`
 				) {
 					return false;
@@ -3692,7 +3734,8 @@ export class ListMaker {
 			if (toReview > 0) {
 				rs.push([
 					"paragraph",
-					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
+					`[[${Paths.Projects}/${
+						project.name === "adhoc" ? "ad hoc" : project.name
 					}/logs]]`,
 				]);
 			}
@@ -3748,7 +3791,8 @@ export class ListMaker {
 				}
 				if (
 					Helper.getProject(fm) !==
-					`${Namespace.Project}/${project.name === "adhoc" ? "none" : project.name
+					`${Namespace.Project}/${
+						project.name === "adhoc" ? "none" : project.name
 					}`
 				) {
 					return false;
@@ -4311,7 +4355,7 @@ export class ListMaker {
 			}
 		}
 
-		const sortBySizeThenDate = function(a, b) {
+		const sortBySizeThenDate = function (a, b) {
 			const fA = a.file;
 			const fB = b.file;
 			if (fA.size !== fB.size) {
@@ -4911,14 +4955,10 @@ export class ListMaker {
 						),
 					]);
 				} catch {
-					rs.push(["paragraph", 
-						Renderer.makeLink(
-							this.dv,
-							task.f,
-							undefined,
-							"daily",
-						),
-					])
+					rs.push([
+						"paragraph",
+						Renderer.makeLink(this.dv, task.f, undefined, "daily"),
+					]);
 				}
 			}
 		}
