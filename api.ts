@@ -119,7 +119,6 @@ class FrontmatterJS {
 		this.fm = f.frontmatter;
 		Assert.True(this.fm !== undefined, "'fm' is undefined");
 		Assert.True(this.fm.uuid !== undefined, "'uuid' is undefined");
-		console.log(`uuid: ${this.fm.uuid}`);
 		// Assert.True(this.fm.version !== undefined, "'version' is undefined");
 		// Assert.True(fm.created_at !== undefined, "'created_at' is undefined");
 
@@ -649,8 +648,7 @@ export const AutoField = {
 			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
 			if (totalTime > 0) {
 				dv.paragraph(
-					`_totalTime (h):_ ${
-						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
 					}`,
 				);
 			}
@@ -991,7 +989,6 @@ export const AutoField = {
 			fmd.resolve(dv);
 			const buff = [];
 			for (const domain of fmd.getDomains()) {
-				console.log(domain);
 				buff.push([`#domain/${domain}`]);
 			}
 			dv.header(2, "Domains");
@@ -1016,7 +1013,6 @@ export const AutoField = {
 
 		if (dirname === Paths.Tasks) {
 			// Actionable
-			console.log(dirname);
 		} else if (dirname == Paths.Inbox) {
 		} else {
 			// Knowledgeable
@@ -1071,21 +1067,28 @@ export const AutoField = {
 			if (fm.at.toISOString().slice(0, 10) === currentAtShort) {
 				return true;
 			}
-		});
+		}).sort((k) => k.at, "asc");
 
-    if (pages.length === 0) {
-      return;
-    }
+		if (pages.length === 0) {
+			return;
+		}
 
-    const buff = [];
+		const buff = [];
 		for (const page of pages) {
-      const fm = new FrontmatterJS(page);
-      const h = String(fm.at.getHours()).padStart(2, "0");
-      const m = String(fm.at.getMinutes()).padStart(2, "0");
-      buff.push([
-        Renderer.makeLinkShortUUID(dv, page.file, "Task"),
-        `${h}:${m}`,
-      ]);
+			const fm = new FrontmatterJS(page);
+			const h = String(fm.at.getHours()).padStart(2, "0");
+			const m = String(fm.at.getMinutes()).padStart(2, "0");
+			if (page.file.frontmatter.status === "done") {
+				buff.push([
+					`~~${Renderer.makeLinkShortUUID(dv, page.file, "Task")}~~`,
+					`~~${h}:${m}~~`,
+				]);
+			} else {
+				buff.push([
+					`${Renderer.makeLinkShortUUID(dv, page.file, "Task")}`,
+					`${h}:${m}`,
+				]);
+			}
 		}
 		dv.table(["uuid", "at"], buff);
 	},
@@ -1293,13 +1296,13 @@ export const Renderer = {
 					fm.components.length === 0
 						? "\\-"
 						: ((components) => {
-								const buff = [];
+							const buff = [];
 
-								for (const component of components) {
-									buff.push(component.slice(10));
-								}
-								return buff.join("<br>");
-							})(Helper.getComponents(fm)),
+							for (const component of components) {
+								buff.push(component.slice(10));
+							}
+							return buff.join("<br>");
+						})(Helper.getComponents(fm)),
 			};
 
 			if (record.type === "log") {
@@ -1828,8 +1831,7 @@ export const Renderer = {
 			dv.table(["created_at", "uuid", "session", "reviewed"], buff);
 			if (totalTime > 0) {
 				dv.paragraph(
-					`_totalTime (h):_ ${
-						Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+					`_totalTime (h):_ ${Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
 					}`,
 				);
 			}
@@ -2022,7 +2024,7 @@ export class Frontmatter {
 
 		const pages = dv.pages(`"${projectDir}/meta"`).array();
 		if (pages.length !== 1) {
-			console.log(pages);
+			// console.log(pages);
 			throw new Error(`len: ${pages.length}`);
 		}
 
@@ -2555,7 +2557,7 @@ export class ListMaker {
 		if (!Helper.nilCheck(curFm.types) && curFm.types !== "*") {
 			noteTypes = curFm.types;
 		}
-		console.log(noteTypes);
+		// console.log(noteTypes);
 		const dropTasks = curFm.drop_status;
 		const minMatchingComponent = components.length;
 
@@ -3190,9 +3192,8 @@ export class ListMaker {
 
 					if (fragments.length > 1) {
 						for (const fragment of fragments) {
-							const key = `component/${component}${
-								fragment === "" ? "" : "/" + fragment
-							}`;
+							const key = `component/${component}${fragment === "" ? "" : "/" + fragment
+								}`;
 							rs.push(["paragraph", `#${key}`]);
 							const tasks = bins[domain][key];
 							if (tasks !== undefined) {
@@ -3436,7 +3437,7 @@ export class ListMaker {
 			rs.push(["array", Renderer.basicTaskJournal, bins.doable]);
 		}
 
-		console.log(bins.waiting);
+		// console.log(bins.waiting);
 		if (bins.waiting.length > 0) {
 			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
 			const buff = [];
@@ -3513,8 +3514,7 @@ export class ListMaker {
 			if (toReview > 0) {
 				rs.push([
 					"paragraph",
-					`[[${Paths.Projects}/${
-						project.name === "adhoc" ? "ad hoc" : project.name
+					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
 					}/logs]]`,
 				]);
 			}
@@ -3581,8 +3581,7 @@ export class ListMaker {
 				}
 				if (
 					Helper.getProject(fm) !==
-					`${Namespace.Project}/${
-						project.name === "adhoc" ? "none" : project.name
+					`${Namespace.Project}/${project.name === "adhoc" ? "none" : project.name
 					}`
 				) {
 					return false;
@@ -3734,8 +3733,7 @@ export class ListMaker {
 			if (toReview > 0) {
 				rs.push([
 					"paragraph",
-					`[[${Paths.Projects}/${
-						project.name === "adhoc" ? "ad hoc" : project.name
+					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
 					}/logs]]`,
 				]);
 			}
@@ -3791,8 +3789,7 @@ export class ListMaker {
 				}
 				if (
 					Helper.getProject(fm) !==
-					`${Namespace.Project}/${
-						project.name === "adhoc" ? "none" : project.name
+					`${Namespace.Project}/${project.name === "adhoc" ? "none" : project.name
 					}`
 				) {
 					return false;
@@ -3868,8 +3865,8 @@ export class ListMaker {
 			? new Date()
 			: new Date(fml.after);
 
-		console.log(`before: '${before}'`);
-		console.log(`after: '${after}'`);
+		// console.log(`before: '${before}'`);
+		// console.log(`after: '${after}'`);
 		const filterBy = this.frontmatter.parseListFilterBy(fml);
 		const rs = [];
 		let totalTime = 0;
@@ -4168,7 +4165,7 @@ export class ListMaker {
 			try {
 				d = keyGetter(entry);
 			} catch {
-				console.log(entry);
+				// console.log(entry);
 				throw new Error(entry);
 			}
 
@@ -4355,7 +4352,7 @@ export class ListMaker {
 			}
 		}
 
-		const sortBySizeThenDate = function (a, b) {
+		const sortBySizeThenDate = function(a, b) {
 			const fA = a.file;
 			const fB = b.file;
 			if (fA.size !== fB.size) {
@@ -4542,7 +4539,6 @@ export class ListMaker {
 			})
 			.array();
 
-		console.log(pages.length);
 		const rs = [];
 		rs.push(["header", 1, "Praxis"]);
 		rs.push(["array", Renderer.basicTask, pages]);
@@ -4933,8 +4929,18 @@ export class ListMaker {
 			}
 		}
 
+		const now = new Date();
+		const currentWeekNumber = this.getWeekNumber(now);
 		for (const key of Object.keys(bins)) {
-			rs.push(["header", 2, `week ${key}`]);
+			const weekNumber = Number(key);
+			if (weekNumber < currentWeekNumber) {
+				rs.push(["header", 2, `~~week ${key}~~`]);
+			} else if (weekNumber === currentWeekNumber) {
+				rs.push(["header", 2, `*week ${key}*`]);
+			} else {
+				rs.push(["header", 2, `week ${key}`]);
+			}
+
 			bins[key].sort((a, b) => {
 				return a.at.getTime() - b.at.getTime();
 			});
@@ -4943,22 +4949,24 @@ export class ListMaker {
 				const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
 					task.at.getDay()
 				];
-				console.log(task.at.getDay());
-				try {
-					rs.push([
-						"paragraph",
-						Renderer.makeLink(
-							this.dv,
-							task.f,
-							`${task.at.toISOString().slice(0, 10)}, ${day}`,
-							"daily",
-						),
-					]);
-				} catch {
-					rs.push([
-						"paragraph",
-						Renderer.makeLink(this.dv, task.f, undefined, "daily"),
-					]);
+				const text = Renderer.makeLink(
+					this.dv,
+					task.f,
+					`${task.at.toISOString().slice(0, 10)}, ${day}`,
+					"daily",
+				);
+
+				if (weekNumber < currentWeekNumber) {
+					rs.push(["paragraph", `~~${text}~~`]);
+
+				} else if (weekNumber === currentWeekNumber) {
+					if (this.dayOfYear(task.at) < this.dayOfYear(now)) {
+						rs.push(["paragraph", `~~${text}~~`]);
+					} else {
+						rs.push(["paragraph", `${text}`]);
+					}
+				} else {
+					rs.push(["paragraph", `${text}`]);
 				}
 			}
 		}
@@ -4966,7 +4974,11 @@ export class ListMaker {
 		return rs;
 	}
 
-	dayOfYear(year: number, month: number, day: number): number {
+	dayOfYear(dt): number {
+		const year = dt.getFullYear();
+		const month = dt.getMonth() + 1;
+		const day = dt.getDate();
+
 		const N1 = Math.floor((275 * month) / 9);
 		const N2 = Math.floor((month + 9) / 12);
 		const N3 = 1 + Math.floor((year - 4 * Math.floor(year / 4) + 2) / 3);
