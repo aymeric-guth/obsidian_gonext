@@ -1685,10 +1685,11 @@ export const Renderer = {
 		const buff = [];
 		// const cols = ["journal", "uuid", "tasks", "estimate"];
 		const cols = ["uuid", "tasks", "estimate"];
-		const journal = dv.pages(`"${Paths.Journal}"`).array()[0].file
-			.frontmatter.tasks;
+		// const journal = dv.pages(`"${Paths.Journal}"`).array()[0].file
+		// 	.frontmatter.tasks;
 
 		for (const d of data) {
+			console.log(d)
 			const f = d.file;
 			const fm = f.frontmatter;
 			const domain =
@@ -3462,8 +3463,6 @@ export class ListMaker {
 
 	projectTasksSheetRelation(dv) {
 		const project = this.projectTasksSheetRelationFrontmatter(dv);
-		const journal = this.dv.pages(`"${Paths.Journal}"`).array()[0].file
-			.frontmatter.tasks;
 		const minPriority = 0;
 
 		const rs = [];
@@ -3502,6 +3501,7 @@ export class ListMaker {
 			}
 		}
 
+
 		{
 			let toReview = 0;
 			const logs = this.getProjectLogs(dv, project);
@@ -3519,6 +3519,8 @@ export class ListMaker {
 				]);
 			}
 		}
+
+		// return rs;
 		// groupBy layer, ??
 		if (bins.nextAction.length > 0) {
 			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
