@@ -120,7 +120,10 @@ class FrontmatterJS {
 		Assert.True(f !== undefined, "'f' is undefined");
 		this.fm = f.frontmatter;
 		Assert.True(this.fm !== undefined, "'fm' is undefined");
-		Assert.True(this.fm.uuid !== undefined, `'uuid' is undefined for '${this.f.path}'`);
+		Assert.True(
+			this.fm.uuid !== undefined,
+			`'uuid' is undefined for '${this.f.path}'`,
+		);
 		// Assert.True(this.fm.version !== undefined, "'version' is undefined");
 		// Assert.True(fm.created_at !== undefined, "'created_at' is undefined");
 
@@ -1077,7 +1080,10 @@ export const AutoField = {
 				}
 
 				const now = new Date();
-				if (page.file.frontmatter.at !== undefined && fm.at.toISOString().slice(0, 10) === currentAtShort) {
+				if (
+					page.file.frontmatter.at !== undefined &&
+					fm.at.toISOString().slice(0, 10) === currentAtShort
+				) {
 					return true;
 				}
 
@@ -1321,7 +1327,7 @@ export const Renderer = {
 				since: `${since}`,
 				size: f.size,
 				project: fm.project === undefined ? "\\-" : fm.project.slice(8),
-				domain: fm.domain === "domain/undefined" ? "\\-" : fm.domain.slice(7), //Renderer.domainBase(dv, fm.domain),
+				domain: fm.domain === undefined ? "\\-" : fm.domain.slice(7), //Renderer.domainBase(dv, fm.domain),
 			};
 
 			if (record.type === "log") {
@@ -4249,126 +4255,93 @@ export class ListMaker {
 	}
 
 	inbox() {
-		let [source, groupBy, filterBy, minSize, maxSize] =
-			this.frontmatter.parseInbox();
 		const rs = [];
 		const buff = [];
 		// fonction d'extraction et d'initialisation des paramrtres du frontmatter
 		// fonction filter, (task) -> bool
 
-		const fml = this.frontmatter.getCurrentFrontmatter();
-		if (fml === undefined) {
-			throw new Error(`Invalid frontmatter, cannot proceed`);
-		}
+		const filterBy = [];
+		const minSize = 0;
+		const maxSize = 4294967295;
 
-		groupBy = fml.group_by;
-		if (
-			!(typeof groupBy === "undefined") &&
-			!(typeof groupBy === "string")
-		) {
-			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
-		}
-		// rs.push(["header", 1, "Inbox"]);
+		const fleetings = this.dv.pages(`"${Paths.Inbox}"`).array();
+		for (const e of fleetings) {
+			const fm = e.file.frontmatter;
+			e.file.frontmatter.createdAt = this.frontmatter.getCreatedAt(
+				e.file,
+			);
+			const fmjs = new FrontmatterJS(e);
+			fm.project = Helper.getProject(fm, true);
+			fm.domain = `domain/${fmjs.getDomain()}`;
+			fm.components = Helper.getComponents(fm);
 
-		if (source.contains("fleeting")) {
-			const fleetings = this.dv.pages(`"${Paths.Inbox}"`).array();
-			for (const e of fleetings) {
-				const fm = e.file.frontmatter;
-				if (
-					filterBy.length > 0 &&
-					!this.nameInNamespace(fm, filterBy)
-				) {
-					continue;
-				}
-
-				e.file.frontmatter.createdAt = this.frontmatter.getCreatedAt(
-					e.file,
-				);
-				const fmjs = new FrontmatterJS(e);
-				fm.project = Helper.getProject(fm, true);
-				fm.domain = `domain/${fmjs.getDomain()}`;
-				fm.components = Helper.getComponents(fm);
-
-				if (e.file.size < minSize) {
-					continue;
-				}
-				if (e.file.size > maxSize) {
-					continue;
-				}
-
-				buff.push(e);
+			if (e.file.size < minSize) {
+				continue;
 			}
+			if (e.file.size > maxSize) {
+				continue;
+			}
+
+			buff.push(e);
 		}
 
-		if (source.contains("logs")) {
-			const logs = this.dv.pages(`"${Paths.Logs}"`).where((p) => {
-				if (p.type !== Types.Log) {
-					return false;
-				}
-
-				const f = p.file;
-				const createdAt = this.frontmatter.getCreatedAt(f);
-				const now = new Date();
-				if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
-					return false;
-				}
-
-				if (p.reviewed !== undefined && p.reviewed >= 1) {
-					return false;
-				}
-
-				const pages = this.dv
-					.pages(`"${Paths.Tasks}/${f.frontmatter.parent_id}"`)
-					.array();
-				if (pages.length !== 1) {
-					return false;
-				}
-
-				// const parent = pages[0];
-				// if (parent.type !== Types.Media) {
-				// 	return false;
-				// }
-
-				return true;
-			});
-
-			for (const e of logs) {
-				const fm = e.file.frontmatter;
-				if (
-					filterBy.length > 0 &&
-					!this.nameInNamespace(fm, filterBy)
-				) {
-					continue;
-				}
-
-				fm.createdAt = this.frontmatter.getCreatedAt(e.file);
-				Assert.True(
-					!Helper.nilCheck(fm.parent_id),
-					`Missing field "parent_id" from log: "${fm.uuid}"`,
-				);
-				const parent = this.dv
-					.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
-					.array();
-				Assert.True(
-					parent.length === 1,
-					`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
-				);
-				fm.project = Helper.getProject(
-					parent[0].file.frontmatter,
-					true,
-				);
-				fm.domain = undefined;
-				fm.components = [];
-
-				if (e.file.size < minSize) {
-					continue;
-				}
-				if (e.file.size > maxSize) {
-					continue;
-				}
-
-				buff.push(e);
+		const logs = this.dv.pages(`"${Paths.Logs}"`).where((p) => {
+			if (p.type !== Types.Log) {
+				return false;
 			}
+
+			const f = p.file;
+			const createdAt = this.frontmatter.getCreatedAt(f);
+			const now = new Date();
+			if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
+				return false;
+			}
+
+			if (p.reviewed !== undefined && p.reviewed >= 1) {
+				return false;
+			}
+
+			const pages = this.dv
+				.pages(`"${Paths.Tasks}/${f.frontmatter.parent_id}"`)
+				.array();
+			if (pages.length !== 1) {
+				return false;
+			}
+
+			// const parent = pages[0];
+			// if (parent.type !== Types.Media) {
+			// 	return false;
+			// }
+
+			return true;
+		});
+
+		for (const e of logs) {
+			const fm = e.file.frontmatter;
+			fm.createdAt = this.frontmatter.getCreatedAt(e.file);
+			Assert.True(
+				!Helper.nilCheck(fm.parent_id),
+				`Missing field "parent_id" from log: "${fm.uuid}"`,
+			);
+			const parent = this.dv
+				.pages(`"${Paths.Tasks}/${fm.parent_id}"`)
+				.array();
+			Assert.True(
+				parent.length === 1,
+				`Parent: ${fm.parent_id} not found for log: "${fm.uuid}"`,
+			);
+			fm.project = Helper.getProject(parent[0].file.frontmatter, true);
+			fm.domain = undefined;
+			fm.components = [];
+
+			if (e.file.size < minSize) {
+				continue;
+			}
+			if (e.file.size > maxSize) {
+				continue;
+			}
+
+			buff.push(e);
 		}
 
 		const sortBySizeThenDate = function(a, b) {
@@ -4642,7 +4615,7 @@ export class ListMaker {
 			throw new Error("No tasks !");
 		}
 
-		const groupBy = fm.group_by;
+		const groupBy = undefined;
 		const bins = {
 			doable: [],
 			waiting: [],
