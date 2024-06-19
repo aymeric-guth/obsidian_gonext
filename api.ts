@@ -65,6 +65,7 @@ class FrontmatterJS {
 	public version: string;
 	public createdAt: Date;
 	public at: Date;
+	public before: Date;
 	public components: string[];
 	public domains: string[];
 	public names: string[];
@@ -73,6 +74,7 @@ class FrontmatterJS {
 	public contents: string[];
 	public traits: string[];
 	public contexts: string[];
+	public status: string;
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
@@ -118,14 +120,18 @@ class FrontmatterJS {
 		Assert.True(f !== undefined, "'f' is undefined");
 		this.fm = f.frontmatter;
 		Assert.True(this.fm !== undefined, "'fm' is undefined");
-		Assert.True(this.fm.uuid !== undefined, "'uuid' is undefined");
+		Assert.True(this.fm.uuid !== undefined, `'uuid' is undefined for '${this.f.path}'`);
 		// Assert.True(this.fm.version !== undefined, "'version' is undefined");
 		// Assert.True(fm.created_at !== undefined, "'created_at' is undefined");
 
 		this.uuid = this.fm.uuid;
 		this.version = this.fm.version;
 		this.createdAt = new Date(this.fm.created_at);
-		this.at = new Date(this.fm.at);
+		this.at = this.fm.at !== undefined ? new Date(this.fm.at) : new Date();
+		this.before =
+			this.fm.before !== undefined
+				? new Date(this.fm.before)
+				: new Date();
 		this.components = [];
 		this.domains = [];
 		this.projects = [];
@@ -1054,20 +1060,44 @@ export const AutoField = {
 		const currentAt = new Date(current.at);
 		const currentAtShort = currentAt.toISOString().slice(0, 10);
 
-		const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
-			if (page.file.frontmatter.at === undefined) {
-				return false;
-			}
+		const pages = dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => {
+				// if (page.file.frontmatter.at === undefined) {
+				// 	return false;
+				// }
 
-			const fm = new FrontmatterJS(page);
-			if (current.uuid === fm.uuid) {
-				return false;
-			}
+				const fm = new FrontmatterJS(page);
+				if (current.uuid === fm.uuid) {
+					return false;
+				}
 
-			if (fm.at.toISOString().slice(0, 10) === currentAtShort) {
-				return true;
-			}
-		}).sort((k) => k.at, "asc");
+				if (fm.fm.status !== "todo" || fm.getProject() === "daily") {
+					return false;
+				}
+
+				const now = new Date();
+				if (page.file.frontmatter.at !== undefined && fm.at.toISOString().slice(0, 10) === currentAtShort) {
+					return true;
+				}
+
+				if (
+					page.file.frontmatter.at !== undefined &&
+					fm.at.getTime() < now.getTime()
+				) {
+					return true;
+				}
+
+				if (
+					page.file.frontmatter.before !== undefined &&
+					fm.before.getTime() > now.getTime()
+				) {
+					return true;
+				}
+
+				return false;
+			})
+			.sort((k) => k.at, "asc");
 
 		if (pages.length === 0) {
 			return;
@@ -1263,7 +1293,7 @@ export const Renderer = {
 			// "size",
 			"project",
 			"domain",
-			"components",
+			// "components",
 		];
 		const buff = [];
 		for (const d of data) {
@@ -1291,18 +1321,7 @@ export const Renderer = {
 				since: `${since}`,
 				size: f.size,
 				project: fm.project === undefined ? "\\-" : fm.project.slice(8),
-				domain: fm.domain === undefined ? "\\-" : fm.domain.slice(7), //Renderer.domainBase(dv, fm.domain),
-				components:
-					fm.components.length === 0
-						? "\\-"
-						: ((components) => {
-							const buff = [];
-
-							for (const component of components) {
-								buff.push(component.slice(10));
-							}
-							return buff.join("<br>");
-						})(Helper.getComponents(fm)),
+				domain: fm.domain === "domain/undefined" ? "\\-" : fm.domain.slice(7), //Renderer.domainBase(dv, fm.domain),
 			};
 
 			if (record.type === "log") {
@@ -1341,7 +1360,6 @@ export const Renderer = {
 				// record.size,
 				record.project,
 				record.domain,
-				record.components,
 			]);
 		}
 
@@ -1689,7 +1707,7 @@ export const Renderer = {
 		// 	.frontmatter.tasks;
 
 		for (const d of data) {
-			console.log(d)
+			console.log(d);
 			const f = d.file;
 			const fm = f.frontmatter;
 			const domain =
@@ -3501,7 +3519,6 @@ export class ListMaker {
 			}
 		}
 
-
 		{
 			let toReview = 0;
 			const logs = this.getProjectLogs(dv, project);
@@ -4251,7 +4268,7 @@ export class ListMaker {
 		) {
 			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
 		}
-		rs.push(["header", 1, "Inbox"]);
+		// rs.push(["header", 1, "Inbox"]);
 
 		if (source.contains("fleeting")) {
 			const fleetings = this.dv.pages(`"${Paths.Inbox}"`).array();
@@ -4517,7 +4534,7 @@ export class ListMaker {
 			}
 		}
 
-		rs.push(["header", 1, "Projects"]);
+		// rs.push(["header", 1, "Projects"]);
 		rs.push(["array", Renderer.basicRelation, bins.active]);
 		rs.push(["header", 2, "Inactive"]);
 		rs.push(["array", Renderer.basicRelation, bins.inactive]);
@@ -4960,7 +4977,6 @@ export class ListMaker {
 
 				if (weekNumber < currentWeekNumber) {
 					rs.push(["paragraph", `~~${text}~~`]);
-
 				} else if (weekNumber === currentWeekNumber) {
 					if (this.dayOfYear(task.at) < this.dayOfYear(now)) {
 						rs.push(["paragraph", `~~${text}~~`]);
