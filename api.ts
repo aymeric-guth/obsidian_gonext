@@ -66,6 +66,7 @@ class FrontmatterJS {
 	public createdAt: Date;
 	public at: Date;
 	public before: Date;
+	public after: Date;
 	public components: string[];
 	public domains: string[];
 	public names: string[];
@@ -134,6 +135,9 @@ class FrontmatterJS {
 		this.before =
 			this.fm.before !== undefined
 				? new Date(this.fm.before)
+				: new Date();
+		this.after = this.fm.after !== undefined
+				? new Date(this.fm.after)
 				: new Date();
 		this.components = [];
 		this.domains = [];
@@ -1097,6 +1101,13 @@ export const AutoField = {
 				if (
 					page.file.frontmatter.before !== undefined &&
 					fm.before.getTime() > now.getTime()
+				) {
+					return true;
+				}
+
+				if (
+					page.file.frontmatter.after !== undefined &&
+					fm.after.getTime() < now.getTime()
 				) {
 					return true;
 				}
