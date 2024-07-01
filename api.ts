@@ -136,9 +136,8 @@ class FrontmatterJS {
 			this.fm.before !== undefined
 				? new Date(this.fm.before)
 				: new Date();
-		this.after = this.fm.after !== undefined
-				? new Date(this.fm.after)
-				: new Date();
+		this.after =
+			this.fm.after !== undefined ? new Date(this.fm.after) : new Date();
 		this.components = [];
 		this.domains = [];
 		this.projects = [];
@@ -1060,6 +1059,46 @@ export const AutoField = {
 				dv.paragraph(Renderer.makeLinkAlias(dv, ref.file));
 			}
 		}
+	},
+
+	calendar(dv) {
+		const current = dv.current().file.frontmatter;
+		const currentAt = new Date(current.at);
+		const currentAtShort = currentAt.toISOString().slice(0, 10);
+
+		const pages = dv
+			.pages(`"Calendar"`)
+			.where((page) => {
+				const fm = page.file.frontmatter;
+				if (fm.completed === true) {
+					return false;
+				}
+
+				const now = new Date();
+				if (fm.date !== currentAtShort) {
+					return false;
+				}
+
+				if (fm.completed === false) {
+					return true;
+				} else {
+					return true;
+				}
+			})
+			.sort((k) => k.at, "asc");
+
+		if (pages.length === 0) {
+			return;
+		}
+
+		const buff = [];
+		for (const page of pages) {
+			const fm = page.file.frontmatter;
+			buff.push([`${fm.startTime} - ${fm.endTime}`, `${fm.title}`]);
+		}
+
+		console.log(pages.length);
+		dv.table(["at", "title"], buff);
 	},
 
 	daily(dv) {
@@ -3544,14 +3583,15 @@ export class ListMaker {
 					toReview += 1;
 				}
 			}
-			rs.push(["header", 2, `Pending Logs (${toReview})`]);
-			if (toReview > 0) {
-				rs.push([
-					"paragraph",
-					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
-					}/logs]]`,
-				]);
-			}
+
+			// rs.push(["header", 2, `Pending Logs (${toReview})`]);
+			// if (toReview > 0) {
+			// 	rs.push([
+			// 		"paragraph",
+			// 		`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
+			// 		}/logs]]`,
+			// 	]);
+			// }
 		}
 
 		// return rs;
@@ -4226,22 +4266,37 @@ export class ListMaker {
 			for (const e of bins[key]) {
 				const buff = [];
 				buff.push(
-					this.dv.sectionLink(
-						e.path,
+					Renderer.makeLinkShortUUID(
+						this.dv,
+						{ path: e.path, frontmatter: { uuid: e.uuid } },
 						"Task",
-						false,
-						`${e.uuid.slice(0, 8)}`,
 					),
 				);
-				// buff.push(e.alias !== undefined ? e.alias : "");
+
+				// buff.push(
+				// 	this.dv.sectionLink(
+				// 		e.path,
+				// 		"Task",
+				// 		false,
+				// 		`${e.uuid.slice(0, 8)}`,
+				// 	),
+				// );
+
 				buff.push(
-					this.dv.sectionLink(
-						e.logPath,
+					Renderer.makeLinkShortUUID(
+						this.dv,
+						{ path: e.logPath, frontmatter: { uuid: e.logId } },
 						"Content",
-						false,
-						`${e.logId.slice(0, 8)}`,
 					),
 				);
+				// buff.push(
+				// 	this.dv.sectionLink(
+				// 		e.logPath,
+				// 		"Content",
+				// 		false,
+				// 		`${e.logId.slice(0, 8)}`,
+				// 	),
+				// );
 
 				// buff.push(`${e.createdAt.toISOString().slice(0, 16)}`);
 				// buff.push(`${e.doneAt.toISOString().slice(0, 16)}`);
