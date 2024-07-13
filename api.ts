@@ -1347,8 +1347,9 @@ export const Renderer = {
 			// "type",
 			// "age",
 			// "size",
-			"project",
-			"domain",
+			"name",
+			// "project",
+			// "domain",
 			// "components",
 		];
 		const buff = [];
@@ -1367,6 +1368,21 @@ export const Renderer = {
 			const now = new Date();
 			const delta = now.getTime() - fm.createdAt.getTime();
 			const since = Helper.msecToStringDuration(delta);
+			let name = "";
+
+			console.log("\n")
+			console.log(fm.domain)
+			console.log(fm.project)
+			console.log("\n")
+
+			if (fm.domain !== "domain/undefined") {
+				name = fm.domain;
+			} else if (fm.project !== undefined) {
+				name = fm.project;
+			} else {
+				name = "\\-";
+			}
+
 			const record = {
 				uuid:
 					Helper.numberTypeToString(fm) === "fleeting"
@@ -1378,6 +1394,7 @@ export const Renderer = {
 				size: f.size,
 				project: fm.project === undefined ? "\\-" : fm.project.slice(8),
 				domain: fm.domain === undefined ? "\\-" : fm.domain.slice(7), //Renderer.domainBase(dv, fm.domain),
+				name: name,
 			};
 
 			if (record.type === "log") {
@@ -1414,8 +1431,9 @@ export const Renderer = {
 				// record.type,
 				// record.since,
 				// record.size,
-				record.project,
-				record.domain,
+				record.name,
+				// record.project,
+				// record.domain,
 			]);
 		}
 
