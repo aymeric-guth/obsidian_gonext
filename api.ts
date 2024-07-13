@@ -1101,6 +1101,16 @@ export const AutoField = {
 		}
 		dv.table(["uuid", "at"], buff);
 	},
+
+	task(dv) {
+		const dvLib = new DvLib();
+		dvLib.autoFieldTask(dv);
+	},
+
+	log(dv) {
+		const dvLib = new DvLib();
+		dvLib.autoFieldLog(dv);
+	},
 };
 
 // this must be called from `dataviewjs` codeblocks
@@ -4999,4 +5009,1038 @@ export class ListMaker {
 		// Calculate full weeks to nearest Thursday
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 	}
+}
+
+export class DvLib {
+  taskDir = "813 Tasks";
+  inboxDir = "800 Inbox";
+  refDir = "802 Refs";
+  logDir = "600 Log";
+
+  Task = {
+    BASE: 3,
+    DAILY: 4,
+    PROVISION: 5,
+  };
+
+  Type = {
+    TASK: 3,
+    DAILY: 4,
+    PROVISION: 5,
+    LOG: 6,
+  };
+
+  Status = {
+    TODO: "todo",
+    DONE: "done",
+    DOING: "doing",
+    TRASH: "trash",
+    MAYBE: "maybe",
+    STANDBY: "standby",
+  };
+
+  Namespace = {
+    AREA: "area",
+    CONTEXT: "context",
+    LAYER: "layer",
+    ORG: "org",
+    PROJECT: "project",
+  };
+
+  Default = {
+    AREA: "none",
+    CONTEXT: "any",
+    LAYER: "none",
+    ORG: "none",
+    PROJECT: "none",
+  };
+
+  _dv = "";
+
+  set dv(mod) {
+    this._dv = mod;
+  }
+
+  get dv() {
+    return this._dv;
+  }
+
+  isChildTag(parent, child) {
+    if (child.length <= parent.length + 1) {
+      return false;
+    } else if (child.slice(0, parent.length + 1) != `${parent}/`) {
+      return false;
+    }
+    return true;
+  }
+
+  stripTag(tag) {
+    let t = "";
+    if (tag.slice(-1) === "/") {
+      t = tag.slice(0, -1);
+    } else {
+      t = tag;
+    }
+    if (t.slice(0, 1) === "#") {
+      t = t.slice(1, t.length);
+    }
+    return t;
+  }
+
+  getTaskFromUUID(dv, uuid) {
+    let n = dv.pages(`"${this.taskDir}/${uuid}"`);
+    if (n.length === 0) {
+      // should warn, this means note depends on a non-existing task
+      console.warn(`"${this.taskDir}/${uuid}" task does not exists`);
+      return undefined;
+    }
+    return n[0];
+  }
+
+  hasValidFormat(task) {
+    // dv.pages returns an array wether it finds 1 or more notes
+    let fm = task.file.frontmatter;
+    if (fm === undefined) {
+      // this should warn, all tasks should have a frontmatter
+      console.warn(
+        `"${this.taskDir}/${task.uuid}" task does not have a frontmatter`,
+      );
+      return false;
+    }
+
+    if (fm.type === undefined) {
+      // all tasks must have a `type` field
+      console.warn(
+        `"${this.taskDir}/${task.uuid}" task does not have a \`type\` field`,
+      );
+      return false;
+    }
+
+    if (fm.status === undefined) {
+      // all tasks must have a `status` field
+      console.warn(
+        `"${this.taskDir}/${task.uuid}" task does not have a \`status\` field`,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  hasPendingDependencies(dv, deps) {
+    for (const dep of deps) {
+      const task = this.getTaskFromUUID(dv, dep);
+      if (task === undefined) {
+        continue;
+      }
+      if (!this.hasValidFormat(task)) {
+        continue;
+      }
+      const fm = task.file.frontmatter;
+      if (
+        fm.type !== this.Task.BASE &&
+        fm.type !== this.Task.PROVISION &&
+        fm.type !== this.Task.DAILY
+      ) {
+        continue;
+      }
+      if (fm.status === this.Status.TODO) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  isDoable(dv, task) {
+    const fm = task.file.frontmatter;
+
+    if (fm.status !== this.Status.TODO) {
+      return false;
+    }
+
+    if (fm.after !== undefined) {
+      const after = new Date(fm.after);
+      if (Date.now() <= after.getTime()) {
+        return false;
+      }
+    }
+
+    const deps = fm.needs;
+    if (deps === undefined || deps.length === 0) {
+      return true;
+    }
+
+    if (this.hasPendingDependencies(dv, deps)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  getNamespaceContent(dv, ns) {
+    let children = [];
+    let resp = dv.pages(`#${ns}`);
+    for (const f of resp) {
+      const tags = f.tags;
+      if (tags === undefined) {
+        continue;
+      }
+
+      for (const tag of tags) {
+        if (this.isChildTag(ns, tag)) {
+          const t = tag.slice(ns.length + 1);
+          if (!children.includes(t)) {
+            children.push(t);
+          }
+        }
+      }
+    }
+
+    return children;
+  }
+
+  isDone(dv, dep) {
+    const task = this.getTaskFromUUID(dv, dep);
+    if (task === undefined) {
+      return false;
+    }
+
+    if (!this.hasValidFormat(task)) {
+      return false;
+    }
+
+    let fm = task.file.frontmatter;
+    if (fm.status === this.Status.DONE) {
+      return true;
+    }
+
+    return false;
+  }
+
+  getTasks(
+    dv,
+    tag,
+    taskType = [this.Task.BASE, this.Task.DAILY, this.Task.PROVISON],
+    status = this.Status.TODO,
+  ) {
+    let buff = [];
+    let tasks = dv.pages(tag);
+
+    for (const task of tasks) {
+      let fm = task.file.frontmatter;
+      if (fm === undefined) {
+        continue;
+      }
+      if (fm.status === undefined || fm.status !== status) {
+        continue;
+      }
+      if (fm.type === undefined || !taskType.contains(fm.type)) {
+        continue;
+      }
+      buff.push(task);
+    }
+
+    return buff;
+  }
+
+  formatTask(dv, task) {
+    return dv.fileLink(task.file.path);
+  }
+
+  formatTaskBis(dv, task) {
+    const f = task.file;
+    let ctx = "";
+
+    for (const tag of f.tags) {
+      if (tag.slice(0, 9) == "#context/") {
+        ctx = tag.slice(9);
+      }
+    }
+
+    return [
+      dv.fileLink(f.path),
+      dv.markdownTaskList(f.tasks),
+      f.frontmatter.time_estimate,
+      ctx,
+    ];
+  }
+
+  formatTaskBase(dv, task) {
+    const f = task.file;
+    const fm = f.frontmatter;
+    const tags = fm.tags;
+
+    const area = this.getArea(tags);
+
+    return [
+      dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+      dv.markdownTaskList(f.tasks),
+      fm.time_estimate,
+      area,
+    ];
+  }
+
+  formatTaskWaiting(dv, task) {
+    const f = task.file;
+    const fm = f.frontmatter;
+    let deps = [];
+
+    if (fm.needs !== undefined) {
+      for (const dep of fm.needs) {
+        deps.push(dv.fileLink(`${this.taskDir}/${dep}`));
+      }
+    }
+  }
+
+  formatTaskMaybe(dv, task) {
+    const f = task.file;
+    const fm = f.frontmatter;
+    let deps = [];
+
+    return [dv.fileLink(f.path)];
+  }
+
+  makeAsyncRequest(dv, uuid) {
+    return dv
+      .query(`LIST WHERE needs AND contains(needs, "${uuid}")`)
+      .then((value) => {
+        return value;
+      });
+  }
+
+  getDependantTasks(dv, task) {
+    const buff = [];
+    const uuid = task.file.name;
+
+    if (task.file.frontmatter === undefined) {
+      return buff;
+    }
+
+    let tasks = dv
+      .pages(`"${this.taskDir}"`)
+      .where((p) => p.needs !== undefined && p.needs.contains(uuid));
+    for (const tk of tasks) {
+      let t = dv.pages(`"${tk.file.path}"`);
+      buff.push(t[0]);
+    }
+
+    return buff;
+  }
+
+  byDependencyAndPriorityAndCreatedAt(dv, a, b) {
+    let ftA = a.file.frontmatter;
+    let ftB = b.file.frontmatter;
+    let prioA = ftA.priority;
+    let prioB = ftB.priority;
+    // before > deps > prio > created_at
+    // let beforeA = ftA.before;
+    // let beforeB = ftB.before;
+
+    const depsA = this.getDependantTasks(dv, a);
+    const depsB = this.getDependantTasks(dv, b);
+
+    if (depsA.length - depsB.length !== 0) {
+      return depsA.length - depsB.length;
+    }
+
+    if (prioA - prioB !== 0) {
+      return prioA - prioB;
+    }
+
+    const dateA = new Date(ftA.created_at);
+    const dateB = new Date(ftB.created_at);
+
+    return (dateA.getTime() - dateB.getTime()) * -1;
+  }
+
+  formatTaskPlanningWaiting(dv, task) {
+    const f = task.file;
+
+    return [
+      // ajouter alias sur le link
+      dv.markdownTaskList(f.tasks),
+      dv.fileLink(f.path, false, f.name.slice(0, 8)),
+      f.frontmatter.time_estimate,
+      f.frontmatter.cause,
+    ];
+  }
+
+  renderBaseAsArray(dv, tasks) {
+    let arr = [];
+    tasks.forEach((task) => {
+      arr.push(this.formatTaskBase(dv, task));
+    });
+    dv.table(["uuid", "tasks", "estimate", "area"], arr);
+  }
+
+  renderPlanningWaiting(dv, tasks) {
+    let arr = [];
+    tasks.forEach((task) => {
+      arr.push(this.formatTaskPlanningWaiting(dv, task));
+    });
+    dv.table(["tasks", "uuid", "estimate", "cause"], arr);
+  }
+
+  renderMaybeAsArray(dv, tasks) {
+    let arr = [];
+    tasks.forEach(({ ref, task }) => {
+      if (task !== undefined) {
+        arr.push(this.formatTaskMaybe(dv, task));
+      }
+    });
+    dv.table(["uuid"], arr);
+  }
+
+  formatTaskDaily(dv, task) {
+    const f = task.file;
+    const fm = task.file.frontmatter;
+    const tags = task.file.tags;
+    let areas = [];
+
+    for (const tag of tags) {
+      if (tag.slice(0, 6) == "#area/") {
+        areas.push(tag.slice(6));
+      }
+    }
+
+    let links = [];
+    for (const link of f.outlinks) {
+      links.push(link);
+    }
+
+    let tasks = [];
+    for (const t of f.tasks) {
+      tasks.push(t);
+    }
+
+    return [
+      dv.fileLink(f.path),
+      links.length > 0 ? dv.markdownList(links) : dv.markdownTaskList(tasks),
+      fm.time_allocated,
+      areas.length > 0 ? dv.markdownList(areas) : "",
+    ];
+  }
+
+  formatFleeting(dv, task) {
+    const f = task.file;
+    const fm = task.file.frontmatter;
+    const tags = task.file.tags;
+    const hours = 3600;
+    const days = 86400;
+
+    let dt = new Date();
+    if (fm !== undefined && fm.created_at !== undefined) {
+      dt = new Date(fm.created_at);
+    } else {
+      dt = new Date(f.ctime.ts);
+    }
+    const now = new Date();
+    let delta = (now.getTime() - dt.getTime()) / 1000;
+    let since = "";
+    const toDt = (t) => {
+      return String(Math.round(t * 10) / 10).padStart(2, "0");
+    };
+    if (delta >= days) {
+      // days ago
+      since = toDt(delta / days) + "d";
+    } else {
+      // hours ago
+      since = toDt(delta / hours) + "h";
+    }
+
+    // return [dv.fileLink(`${f.path}#Content`), since, f.size];
+    if (fm.alias === undefined || fm.alias === "") {
+      return [dv.fileLink(`${f.path}`), since, f.size];
+    } else {
+      return [dv.fileLink(`${f.path}`, false, fm.alias), since, f.size];
+    }
+  }
+
+  renderDailyAsArray(dv, tasks) {
+    let arr = [];
+    tasks.forEach((task) => {
+      arr.push(this.formatTaskDaily(dv, task));
+    });
+    dv.table(["uuid", "content", "duration", "area"], arr);
+  }
+
+  renderFleetingAsArray(dv, tasks) {
+    let arr = [];
+    tasks.forEach((task) => {
+      arr.push(this.formatFleeting(dv, task));
+    });
+    dv.table(["content", "age", "size"], arr);
+  }
+
+  autoFieldNeed(dv, fm) {
+    if (fm.needs === undefined) {
+      return;
+    }
+    let buff = [];
+    for (const dep of fm.needs) {
+      if (!this.isDone(dv, dep)) {
+        buff.push(dv.fileLink(`${this.taskDir}/${dep}`));
+      }
+    }
+    if (buff.length > 0) {
+      dv.header(2, "Needs");
+      dv.list(buff);
+    }
+  }
+
+  autoFieldNeededBy(dv, current) {
+    let tasks = this.getDependantTasks(dv, current);
+    if (tasks.length === 0) {
+      return;
+    }
+
+    let buff = [];
+    for (const task of tasks) {
+      if (!this.isDone(dv, task.uuid)) {
+        buff.push(dv.fileLink(task.file.path));
+      }
+    }
+    if (buff.length > 0) {
+      dv.header(2, "NeededBy");
+      dv.list(buff);
+    }
+  }
+
+  autoFieldTags(dv, fm) {
+    let tags = fm.tags;
+    if (tags == undefined || tags.length === 0) {
+      return;
+    }
+
+    tags.sort();
+    dv.header(2, "Tags");
+    let s = "";
+    for (const tag of tags) {
+      s += ` #${tag}`;
+    }
+    dv.paragraph(s);
+
+    // dv.paragraph(s);
+    // for (const tag of tags) {
+    //   dv.paragraph(`#${tag}`);
+    // }
+  }
+
+  autoFieldTaskBase(dv) {
+    let current = dv.current();
+    let fm = current.file.frontmatter;
+    if (fm === undefined) {
+      console.warn("fm is required");
+      return;
+    }
+
+    this.autoFieldNeed(dv, fm);
+    this.autoFieldNeededBy(dv, current);
+    this.autoFieldTags(dv, fm);
+
+    const logEntries = dv
+      .pages(`"${this.logDir}/${fm.uuid}"`)
+      .where((p) => p.type === 6)
+      .sort((k) => k.created_at, "desc");
+
+    const buff = [];
+    let totalTime = 0;
+    for (const entry of logEntries) {
+      const fme = entry.file.frontmatter;
+      const e = [];
+      let start = 0;
+      let stop = 0;
+
+      if (fme === undefined || fme.created_at === undefined) {
+        throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+      }
+
+      start = new Date(fme.created_at);
+      e.push(start.toISOString().slice(0, 10));
+
+      if (fme.done_at === undefined) {
+        stop = Date.now();
+      } else {
+        stop = new Date(fme.done_at);
+      }
+      totalTime += stop - start;
+
+      e.push(
+        dv.sectionLink(fme.uuid, "## Content", false, fme.uuid.slice(0, 8)),
+      );
+      e.push(Math.round(((stop - start) / (1000 * 60 * 60)) * 10) / 10);
+      if (fme.reviewed === undefined || fme.reviewed === 0) {
+        e.push(0);
+      } else {
+        e.push(fme.reviewed);
+      }
+
+      buff.push(e);
+    }
+
+    if (buff.length > 0) {
+      dv.header(2, "Logs");
+      dv.table(["created_at", "uuid", "session", "reviewed"], buff);
+      if (totalTime > 0) {
+        dv.paragraph(
+          `_totalTime (h):_ ${
+            Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10
+          }`,
+        );
+      }
+    }
+  }
+
+  autoFieldPermanent(dv) {
+    let current = dv.current();
+    let fm = current.file.frontmatter;
+    if (fm === undefined) {
+      return;
+    }
+    this.autoFieldTags(dv, fm);
+  }
+
+  autoFieldLog(dv) {
+    let current = dv.current();
+    let fm = current.file.frontmatter;
+    if (fm === undefined) {
+      return;
+    }
+
+    dv.header(2, "Parent");
+    dv.paragraph(dv.fileLink(`${this.taskDir}/${fm.parent_id}`));
+  }
+
+  autoFieldAuthors(dv, fm) {
+    let authors = fm.authors;
+    if (authors === undefined || authors.length === 0) {
+      return;
+    }
+    dv.header(2, "Authors");
+    dv.list(authors);
+  }
+
+  autoFieldTitle(dv, fm) {
+    let title = fm.alias;
+    if (title == undefined) {
+      return;
+    }
+
+    dv.header(1, title);
+  }
+
+  autoFieldLiteratureNote(dv) {
+    let current = dv.current();
+    let fm = current.file.frontmatter;
+    if (fm === undefined) {
+      return;
+    }
+
+    this.autoFieldTitle(dv, fm);
+    this.autoFieldAuthors(dv, fm);
+    this.autoFieldTags(dv, fm);
+  }
+
+  autoFieldPermanent(dv) {
+    let current = dv.current();
+    let fm = current.file.frontmatter;
+    if (fm === undefined) {
+      return;
+    }
+
+    this.autoFieldTags(dv, fm);
+  }
+
+  autoFieldTask(dv) {
+    return this.autoFieldTaskBase(dv);
+  }
+
+  autoFieldLiterature(dv) {
+    return this.autoFieldLiteratureNote(dv);
+  }
+
+  autoFieldFleeting(dv) {
+    return;
+  }
+
+  autoFieldSupply(dv) {
+    return;
+  }
+
+  findTasksByProject(dv, name) {
+    const buff = [];
+
+    if (name !== "" && name !== "none") {
+      const tasks = this.getTasks(dv, `${this.Namespace.PROJECT}/none`, [
+        this.Task.BASE,
+      ]);
+      for (const task of tasks) {
+        const fm = task.file.frontmatter;
+        if (this.isDoable(dv, task)) {
+          buff.push(task);
+        }
+      }
+    } else {
+      const tasks = this.getTasks(dv, "", [this.Task.BASE]);
+      for (const task of tasks) {
+        const fm = task.file.frontmatter;
+        const tags = fm.tags;
+        if (
+          (fm.tags === undefined && (name === "" || name === "none")) ||
+          fm.tags.contains(`${this.Namespace.PROJECT}/none`)
+        ) {
+          if (this.isDoable(dv, task)) {
+            buff.push(task);
+          }
+        }
+      }
+    }
+
+    buff.sort();
+    return buff;
+  }
+
+  getTag(tags, type) {
+    let name = "";
+    let defaultValue = "";
+
+    if (type === "area") {
+      name = this.Namespace.AREA;
+      defaultValue = this.Default.AREA;
+    } else if (type === "context") {
+      name = this.Namespace.CONTEXT;
+      defaultValue = this.Default.CONTEXT;
+    } else if (type === "layer") {
+      name = this.Namespace.LAYER;
+      defaultValue = this.Default.LAYER;
+    } else if (type === "org") {
+      name = this.Namespace.ORG;
+      defaultValue = this.Default.ORG;
+    } else if (type === "project") {
+      name = this.Namespace.PROJECT;
+      defaultValue = this.Default.PROJECT;
+    } else {
+      throw new Error(`getTag got unsuported type: ${type}`);
+    }
+
+    const len = name.length + 1;
+    const defaultTag = `${name}/${defaultValue}`;
+    if (tags === undefined) {
+      return defaultTag;
+    }
+
+    for (const tag of tags) {
+      if (tag.length > len && tag.slice(0, len) == `${name}/`) {
+        return tag;
+      }
+    }
+
+    return defaultTag;
+  }
+
+  getArea(tags) {
+    return this.getTag(tags, "area");
+  }
+
+  getContext(tags) {
+    return this.getTag(tags, "context");
+  }
+  getLayer(tags) {
+    return this.getTag(tags, "layer");
+  }
+
+  getOrg(tags) {
+    return this.getTag(tags, "org");
+  }
+
+  getProject(tags) {
+    return this.getTag(tags, "project");
+  }
+
+  parseListFrontmatter(fm) {
+    let minPriority = 0;
+    if (fm.min_priority !== undefined) {
+      minPriority = fm.min_priority;
+    }
+
+    let ignore = [];
+    if (fm.ignore !== undefined) {
+      ignore = fm.ignore;
+    }
+
+    let byAreas = [];
+    if (fm.by_areas !== undefined) {
+      byAreas = fm.by_areas;
+    }
+
+    let byProjects = [];
+    if (fm.by_projects !== undefined) {
+      byProjects = fm.by_projects;
+    }
+    return [minPriority, ignore, byAreas, byProjects];
+  }
+
+  renderNamespaceContent(dv) {
+    const self = dv.current();
+    const name = self.file.name.toLowerCase().slice(0, -1);
+
+    dv.header(1, "Index");
+    dv.header(2, `${self.file.name}`);
+
+    const tags = this.getNamespaceContent(dv, name);
+    tags.sort();
+
+    for (const tag of tags) {
+      dv.paragraph(`#${name}/${tag}`);
+    }
+  }
+
+  renderUnprocessedLogs(dv) {
+    const logs = dv
+      .pages(`"${this.logDir}"`)
+      .where(
+        (p) =>
+          p.type === this.Type.LOG &&
+          (p.reviewd === undefined || p.reviewed < 1),
+      )
+      .sort((k) => k.created_at, "asc");
+
+    const buff = [];
+
+    for (const entry of logs) {
+      // console.log(entry.file);
+      // const fm = task.file.frontmatter;
+      // if (ignore.contains(fm.uuid)) {
+      // 	continue;
+      // }
+      // if (today.contains(fm.uuid)) {
+      // 	continue;
+      // }
+      // if (fm.priority !== undefined && fm.priority < minPriority) {
+      // 	continue;
+      // }
+      // if (lib.isDoable(dv, task)) {
+      // 	buff.push(task);
+      // }
+    }
+
+    // if (tasks.length > 0) {
+    // 	dv.header(2, "AdHoc");
+    // 	lib.renderBaseAsArray(dv, buff.reverse());
+    // }
+
+    const arr = [];
+    logs.forEach((entry) => {
+      const fm = entry.file.frontmatter;
+      if (fm === undefined) {
+        return;
+      }
+
+      const parentId = fm.parent_id;
+      if (parentId === undefined) {
+        throw new Error(`Invalid log entry: ${entry.file.path}`);
+      }
+
+      const parent = dv.pages(`"${this.taskDir}/${parentId}"`);
+      const parentFm = parent.file.frontmatter;
+      if (parentFm === undefined) {
+        throw new Error(`Invalid task: ${parent.file.path}`);
+      }
+
+      let project = this.getProject(parentFm.tags);
+      if (project === `${this.Namespace.PROJECT}/${this.Default.PROJECT}`) {
+        project = "";
+      }
+
+      let area = this.getArea(parentFm.tags);
+      if (area === `${this.Namespace.AREA}/${this.Default.AREA}`) {
+        area = "";
+      }
+
+      const formated = [];
+
+      formated.push(
+        dv.sectionLink(
+          entry.file.path,
+          "Content",
+          false,
+          `${fm.uuid.slice(0, 8)}`,
+        ),
+      );
+      const createdAt = new Date(fm.created_at);
+      formated.push(createdAt.toISOString().slice(0, 10));
+      formated.push(project);
+      formated.push(area);
+      arr.push(formated);
+    });
+
+    dv.table(["uuid", "created_at", "project", "area"], arr);
+  }
+
+  assertTaskDoneAt(dv, taskId) {
+    const task = dv.pages(`"${this.taskDir}/${taskId}"`);
+    if (task.length === 0) {
+      throw new Error(`task: ${taskId} doest not exists`);
+    }
+
+    const fm = task.file.frontmatter;
+    if (fm === undefined) {
+      throw new Error(`task: ${taskId} does not have a frontmatter`);
+    }
+
+    const logs = dv
+      .pages(`"${this.logDir}/${taskId}"`)
+      .sort((k) => k.created_at, "asc");
+    if (logs.length < 1) {
+      throw new Error(`task: ${taskId} has no Logs`);
+    }
+
+    const lastEntry = logs[logs.length - 1];
+    if (lastEntry.file.frontmatter.done_at === undefined) {
+      throw new Error(`task: ${taskId} last entry is missing 'done_at' field`);
+    }
+
+    const doneAt = new Date(lastEntry.file.frontmatter.done_at);
+    return [
+      dv.sectionLink(
+        task.file.path,
+        "Content",
+        false,
+        `${task.file.frontmatter.uuid.slice(0, 8)}`,
+      ),
+      `${doneAt.toISOString().slice(0, 10)}`,
+    ];
+  }
+
+  getDoneTimeline(dv) {
+    // prends en compte doing -> done, pas les task sur lequelles du travail a été fait mais qui ont été suspend
+    // daily, task trop longue pour etre faite en un sitting
+    const tasks = dv
+      .pages(`"${this.taskDir}"`)
+      .where((p) => p.status === "done");
+
+    const buff = [];
+    for (const task of tasks) {
+      const fm = task.file.frontmatter;
+      if (fm === undefined) {
+        throw new Error(`task: ${fm.uuid} does not have a frontmatter`);
+      }
+
+      const logs = dv
+        .pages(`"${this.logDir}/${fm.uuid}"`)
+        .sort((k) => k.created_at, "asc");
+      if (logs.length < 1) {
+        console.warn(`task: ${fm.uuid} has no Logs`);
+        // throw new Error(`task: ${taskId} has no Logs`);
+      }
+
+      const lastEntry = logs[logs.length - 1];
+      if (lastEntry === undefined) {
+        continue;
+      }
+      if (lastEntry.file.frontmatter.done_at === undefined) {
+        throw new Error(
+          `task: ${fm.uuid} last entry is missing 'done_at' field`,
+        );
+      }
+
+      fm.doneAt = new Date(lastEntry.file.frontmatter.done_at);
+      buff.push(task);
+    }
+
+    buff.sort((a, b) => {
+      const dateA = new Date(a.file.frontmatter.doneAt);
+      const dateB = new Date(b.file.frontmatter.doneAt);
+      return (dateA.getTime() - dateB.getTime()) * -1;
+    });
+
+    const arr = [];
+    buff.forEach((e) => {
+      arr.push([
+        dv.sectionLink(
+          e.file.path,
+          "Content",
+          false,
+          `${e.file.frontmatter.uuid.slice(0, 8)}`,
+        ),
+        `${e.file.frontmatter.doneAt.toISOString().slice(0, 16)}`,
+      ]);
+    });
+
+    dv.table(["uuid", "doneAt"], arr);
+  }
+
+  durationStringToSec(val) {
+    const mult = val.slice(-1);
+    let m = 0;
+    if (mult === "h") {
+      m = 60 * 60;
+    } else if (mult === "m") {
+      m = 60;
+    } else if (mult === "d") {
+      m = 24 * 60 * 60;
+    } else {
+      console.warn(`Unhandled case mult: ${mult}`);
+    }
+
+    return m * parseInt(val.slice(0, -1));
+  }
+
+  testDvFunc() {
+    // prends en compte doing -> done, pas les task sur lequelles du travail a été fait mais qui ont été suspend
+    // daily, task trop longue pour etre faite en un sitting
+    const dv = app.plugins.plugins.dataview.api;
+    const tasks = dv
+      .pages(`"${this.taskDir}"`)
+      .where((p) => p.status === "done");
+
+    const buff = [];
+    for (const task of tasks) {
+      const fm = task.file.frontmatter;
+      if (fm === undefined) {
+        throw new Error(`task: ${fm.uuid} does not have a frontmatter`);
+      }
+
+      const logs = dv
+        .pages(`"${this.logDir}/${fm.uuid}"`)
+        .sort((k) => k.created_at, "asc");
+      if (logs.length < 1) {
+        console.warn(`task: ${fm.uuid} has no Logs`);
+        // throw new Error(`task: ${taskId} has no Logs`);
+      }
+
+      const lastEntry = logs[logs.length - 1];
+      if (lastEntry === undefined) {
+        continue;
+      }
+      if (lastEntry.file.frontmatter.done_at === undefined) {
+        throw new Error(
+          `task: ${fm.uuid} last entry is missing 'done_at' field`,
+        );
+      }
+
+      fm.doneAt = new Date(lastEntry.file.frontmatter.done_at);
+      buff.push(task);
+    }
+
+    buff.sort((a, b) => {
+      const dateA = new Date(a.file.frontmatter.doneAt);
+      const dateB = new Date(b.file.frontmatter.doneAt);
+      return (dateA.getTime() - dateB.getTime()) * -1;
+    });
+
+    const arr = [];
+    buff.forEach((e) => {
+      arr.push([
+        dv.sectionLink(
+          e.file.path,
+          "Content",
+          false,
+          `${e.file.frontmatter.uuid.slice(0, 8)}`,
+        ),
+        `${e.file.frontmatter.doneAt.toISOString().slice(0, 16)}`,
+      ]);
+    });
+
+    // dv.table(["uuid", "doneAt"], arr);
+  }
 }

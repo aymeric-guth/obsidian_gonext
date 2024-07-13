@@ -18,6 +18,8 @@ import {
 	// @ts-ignore
 	Renderer,
 	AutoField,
+	// @ts-ignore
+	DvLib,
 } from "./api";
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
@@ -103,6 +105,7 @@ export default class MyPlugin extends Plugin {
 			listMaker: this.listMaker,
 			renderer: Renderer,
 			autoField: AutoField,
+			dvLib: new DvLib(),
 		};
 
 		// @ts-ignore
