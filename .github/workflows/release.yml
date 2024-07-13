@@ -19,7 +19,7 @@ jobs:
           npm run build
       - name: Create release
         env:
-          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+          GH_TOKEN: ${{ secrets.TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
           gh release create "$tag" \
