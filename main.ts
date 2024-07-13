@@ -1,19 +1,25 @@
+// @ts-ignore
 import {
 	App,
 	Modal,
 	Plugin,
 	Workspace,
+	// @ts-ignore
 	HTMLElement,
 	MarkdownView,
 } from "obsidian";
+// @ts-ignore
 import {
 	Helper,
 	Frontmatter,
 	ListMaker,
+	// @ts-ignore
 	Namespace,
+	// @ts-ignore
 	Renderer,
 	AutoField,
 } from "./api";
+// @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
 // Remember to rename these classes and interfaces!
@@ -35,13 +41,14 @@ class Current {
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 	workspace: Workspace;
-	metadataCache: Any;
-	dv: Any;
+	metadataCache: any;
+	dv: any;
+	// @ts-ignore
 	render: Render;
-	debug: bool;
+	debug: boolean;
 	taskInStatusBar: HTMLElement;
-	api: Any;
-	listMake: ListMaker;
+	api: any;
+	listMaker: ListMaker;
 	frontmatter: Frontmatter;
 
 	printCoucou() {
@@ -73,7 +80,9 @@ export default class MyPlugin extends Plugin {
 		await this.loadSettings();
 		this.metadataCache = app.metadataCache;
 		this.workspace = app.workspace;
+		// @ts-ignore
 		this.dv = app.plugins.plugins.dataview.api;
+		// @ts-ignore
 		this.frontmatter = new Frontmatter(this);
 		this.listMaker = new ListMaker(this, this.dv, this.frontmatter);
 
@@ -96,8 +105,11 @@ export default class MyPlugin extends Plugin {
 			autoField: AutoField,
 		};
 
+		// @ts-ignore
 		window.gonext = {
+			// @ts-ignore
 			state: window.gonext?.state ?? {},
+			// @ts-ignore
 			app: this.app,
 		};
 
@@ -115,24 +127,33 @@ export default class MyPlugin extends Plugin {
 			// 	.where((fm) => fm.status === "doing");
 			// this.taskInStatusBar.setText(`${activeTasks.length} active`);
 
+			// @ts-ignore
 			const leaf = app.workspace.activeLeaf;
+			// @ts-ignore
 			const tabTitleOrig = leaf.tabHeaderInnerTitleEl.innerText;
+			// @ts-ignore
 			if (tabTitleOrig.length !== 36) {
 				// console.warn("'tabTitleOrig.length' !== 36");
 				return;
 			}
 
+			// @ts-ignore
 			const fm = this.frontmatter.getCurrentFrontmatter();
+			// @ts-ignore
 			if (fm === undefined) {
 				return undefined;
 			}
 
+			// @ts-ignore
 			const alias = fm.alias;
+			// @ts-ignore
 			if (Helper.nilCheck(alias) || alias === "") {
 				return;
 			}
 
+			// @ts-ignore
 			leaf.tabHeaderInnerTitleEl.innerText = alias;
+			// @ts-ignore
 			leaf.tabHeaderInnerTitleEl.innerHTML = alias;
 
 			// app.workspace.activeLeaf.containerEl.children -> html, good luck pour retrouver la bonne div
@@ -144,8 +165,11 @@ export default class MyPlugin extends Plugin {
 		this.addCommand({
 			id: "gonext-utils-copy-current-file-uuid",
 			name: "Copy current file UUID",
+			// @ts-ignore
 			editorCallback: (editor: Editor, view: MarkdownView) => {
+				// @ts-ignore
 				const fm = this.gonext.getCurrentFrontmatter();
+				// @ts-ignore
 				if (fm === undefined) {
 					// console.warn(
 					// 	"Current file does not have a valid `frontmatter`",
@@ -166,6 +190,7 @@ export default class MyPlugin extends Plugin {
 		this.addCommand({
 			id: "safe-delete",
 			name: "Safe Delete",
+			// @ts-ignore
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const file = app.workspace.getActiveFile();
 				const fm = app.metadataCache.getFileCache(file).frontmatter;
@@ -190,8 +215,11 @@ export default class MyPlugin extends Plugin {
 					}
 				}
 
+				// @ts-ignore
 				if (
+					// @ts-ignore
 					file.path.split(0, Paths.Resources.length) ===
+					// @ts-ignore
 					Paths.Resources
 				) {
 					return;
@@ -213,6 +241,7 @@ export default class MyPlugin extends Plugin {
 		this.addCommand({
 			id: "go-parent",
 			name: "Go Parent",
+			// @ts-ignore
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const file = app.workspace.getActiveFile();
 				const fm = app.metadataCache.getFileCache(file).frontmatter;
@@ -255,6 +284,7 @@ export default class MyPlugin extends Plugin {
 
 	onunload() {
 		console.log("gonext - onunload()");
+		// @ts-ignore
 		delete window.gonext;
 	}
 
@@ -278,6 +308,7 @@ export class ExampleModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
+		// @ts-ignore
 		const dv = this.app.plugins.plugins.dataview.api;
 		const tasks = dv.pages().array().slice(0, 10);
 		let s = "";

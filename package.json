@@ -1,7 +1,7 @@
 {
 	"name": "gonext",
-	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"version": "1.0.1",
+	"description": "You should not be here",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

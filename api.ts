@@ -71,11 +71,12 @@ class FrontmatterJS {
 	public domains: string[];
 	public names: string[];
 	public projects: string[];
-	public fm: any;
+	public fm;
 	public contents: string[];
 	public traits: string[];
 	public contexts: string[];
 	public status: string;
+	public f;
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
@@ -408,7 +409,7 @@ export const Helper = {
 		}
 	},
 
-	getTag(fm, type, emptyDefault) {
+	getTag(fm, type, emptyDefault=undefined) {
 		let name = "";
 		let defaultValue = "";
 
@@ -554,7 +555,7 @@ export const Helper = {
 		return m * parseInt(val.slice(0, -1));
 	},
 
-	msecToStringDuration(val: number): number {
+	msecToStringDuration(val: number) {
 		const oneHourInMsec = 3600000; // 1 hour in msec
 		const oneDayInMsec = 86400000; // 1 day in msec
 		if (val >= 24 * oneHourInMsec) {
@@ -624,8 +625,8 @@ export const AutoField = {
 		for (const entry of entries) {
 			const fme = entry.file.frontmatter;
 			const e = [];
-			let start = 0;
-			let stop = 0;
+			let start: any = 0;
+			let stop: any = 0;
 			if (fme === undefined || fme.created_at === undefined) {
 				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
 			}
@@ -845,85 +846,6 @@ export const AutoField = {
 		}
 	},
 
-	goal(dv) {
-		const current = dv.current();
-		const fm = current.file.frontmatter;
-		if (fm === undefined) {
-			console.warn("fm is required");
-			return;
-		}
-
-		// this.autoFieldNeed(dv, fm);
-		// this.autoFieldNeededBy(dv, current);
-		// this.autoFieldTags(dv, fm);
-		//
-		const created_at = new Date(fm.created_at);
-		const logEntries = dv
-			.pages(`"${Paths.Logs}/${fm.uuid}"`)
-			.where((p) => p.type === 6)
-			.sort((k) => k.created_at, "desc");
-
-		const buff = [];
-		for (const entry of logEntries) {
-			const fme = entry.file.frontmatter;
-			const e = [];
-
-			if (fme === undefined || fme.created_at === undefined) {
-				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
-			}
-
-			const start = new Date(fme.created_at);
-			e.push(start.toISOString().slice(0, 10));
-
-			e.push(
-				dv.sectionLink(
-					fme.uuid,
-					"## Content",
-					false,
-					fme.uuid.slice(0, 8),
-				),
-			);
-
-			buff.push(e);
-		}
-
-		const before = new Date(fm.before);
-		// days
-		const timeframe =
-			(before.getTime() - created_at.getTime()) / (1000 * 3600 * 24);
-		let timeframeText = "";
-		// 1 jour
-		// 1 semaine
-		// 2 semaine
-		// 1 mois
-		// 2 mois
-		// 6 mois
-		// 1 an
-		// 2 ans
-		// 5 ans
-		dv.header(3, "Timeframe");
-		if (timeframe > 0 && timeframe < 30) {
-			timeframeText = "runaway";
-		} else if (timeframe < 60) {
-			timeframeText = "10,000 feet";
-		} else if (timeframe < 360) {
-			timeframeText = "20,000 feet";
-		} else if (timeframe < 720) {
-			timeframeText = "30,000 feet";
-		} else if (timeframe < 1080) {
-			timeframeText = "40,000 feet";
-		} else {
-			timeframeText = "50,000 feet";
-		}
-
-		dv.paragraph(timeframeText);
-
-		if (buff.length > 0) {
-			dv.header(2, "Reviews");
-			dv.table(["reviewed_at", "uuid"], buff);
-		}
-	},
-
 	domain(dv) {
 		const current = dv.current();
 		const fm = current.file.frontmatter;
@@ -968,6 +890,7 @@ export const AutoField = {
 					uuid: fme.uuid,
 					createdAt: new Date(fme.created_at),
 					before: new Date(fme.before),
+					delta: undefined,
 				};
 				entry.delta =
 					entry.before.getTime() - entry.createdAt.getTime();
@@ -1238,6 +1161,7 @@ export const Renderer = {
 				logId: Renderer.makeLinkAlias(dv, f),
 				took: Math.round((delta / (1000 * 60 * 60)) * 10) / 10,
 				reviewed: Helper.nilCheck(fm.reviewed) ? 0 : fm.reviewed,
+				type: undefined,
 			};
 			const pages = dv.pages(`"${Paths.Tasks}/${fm.parent_id}"`).array();
 			if (pages.length !== 1) {
@@ -1263,7 +1187,6 @@ export const Renderer = {
 						"Content",
 					);
 					break;
-					aalkjkljlkjfsidfsldfj;
 				case Types.Praxis:
 					record.type = `<font color=FF8C00>praxis</font>`;
 					record.taskId = Renderer.makeLinkShortUUID(
@@ -1282,7 +1205,7 @@ export const Renderer = {
 					break;
 				default:
 					throw new Error(
-						`Renderer.projectLogs: type "${parentTask.file.frontmatter.type}" not implemented`,
+						`Renderer.projectLogs: type "${parent.file.frontmatter.type}" not implemented`,
 					);
 			}
 			buff.push([
@@ -1634,8 +1557,8 @@ export const Renderer = {
 				!Helper.nilCheck(fm.uuid),
 				`"uuid" id not defined for: ${f.path}`,
 			);
-			const dt =
-				app.plugins.plugins.gonext.api.frontmatter.getCreatedAt(f);
+			// @ts-ignore
+			const dt = app.plugins.plugins.gonext.api.frontmatter.getCreatedAt(f);
 			const now = new Date();
 			const delta = now.getTime() - dt.getTime();
 			const since = Helper.msecToStringDuration(delta);
@@ -1888,8 +1811,8 @@ export const Renderer = {
 		for (const entry of entries) {
 			const fme = entry.file.frontmatter;
 			const e = [];
-			let start = 0;
-			let stop = 0;
+			let start: any = 0;
+			let stop: any = 0;
 			if (fme === undefined || fme.created_at === undefined) {
 				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
 			}
@@ -1956,8 +1879,8 @@ export const Renderer = {
 			for (const entry of logEntries) {
 				const fme = entry.file.frontmatter;
 				const e = [];
-				let start = 0;
-				let stop = 0;
+				let start: any = 0;
+				let stop: any = 0;
 				if (fme === undefined || fme.created_at === undefined) {
 					throw new Error(`Invalid frontmatter: ${fme.uuid}`);
 				}
@@ -1998,8 +1921,8 @@ export const Renderer = {
 		for (const d of data) {
 			const f = d.file;
 			const fm = d.file.frontmatter;
-			const createdAt = new Date(fm.created_at);
-			const doneAt = new Date(fm.done_at);
+			const createdAt: any = new Date(fm.created_at);
+			const doneAt: any = new Date(fm.done_at);
 			const timeEstimate = "";
 			const took = (doneAt - createdAt) / (1000 * 3600);
 			const pages = dv
@@ -2089,14 +2012,14 @@ export const Renderer = {
 					dv.paragraph(`${name} (${unit}): ${value}`);
 					break;
 				default:
-					throw new Error(`Unsuported opcode: "${opcode}"`);
+					throw new Error(`Unsuported opcode: "fuckoff"`);
 			}
 		}
 	},
 };
 
 export class Frontmatter {
-	gonext: Any;
+	gonext: any;
 
 	constructor(gonext) {
 		this.gonext = gonext;
@@ -2316,8 +2239,8 @@ export class Frontmatter {
 }
 
 export class NoteHelper {
-	dv: Any;
-	gonext: Any;
+	dv: any;
+	gonext: any;
 	frontmatter: Frontmatter;
 
 	constructor(gonext, dv, frontmatter) {
@@ -2470,8 +2393,8 @@ export class NoteHelper {
 }
 
 export class ListMaker {
-	dv: Any;
-	gonext: Any;
+	dv: any;
+	gonext: any;
 	frontmatter: Frontmatter;
 	noteHelper: NoteHelper;
 
@@ -2482,7 +2405,7 @@ export class ListMaker {
 		this.noteHelper = new NoteHelper(gonext, dv, frontmatter);
 	}
 
-	nameInNamespace(fm: Any, ns: string[]) {
+	nameInNamespace(fm: any, ns: string[]) {
 		let found = false;
 		if (ns.length === 0) {
 			return true;
@@ -2548,13 +2471,13 @@ export class ListMaker {
 	}
 
 	filterByNamespace(
-		fm: Any,
+		fm: any,
 		byAreas: string[],
 		byContexts: string[],
 		byLayers: string[],
 		byOrgs: string[],
 		byProjects: string[],
-	): bool {
+	): boolean {
 		// if (byAreas.length > 0 && !byAreas.contains(Helper.getArea(fm))) {
 		// 	return false;
 		// }
@@ -2626,7 +2549,7 @@ export class ListMaker {
 		return true;
 	}
 
-	filterByDate(dt: Date, before: Date, after: Date): bool {
+	filterByDate(dt: Date, before: Date, after: Date): boolean {
 		if (before !== undefined && dt.getTime() > before.getTime()) {
 			return false;
 		}
@@ -4220,6 +4143,11 @@ export class ListMaker {
 					domain: Helper.getField(Helper.getDomain(fm, true), ""),
 					path: task.file.path,
 					logPath: log.file.path,
+					createdAt: undefined,
+					doneAt: undefined,
+					took: undefined,
+					tookAcc: undefined,
+					deltaAcc: undefined,
 				};
 				if (fml.created_at === undefined) {
 					console.log(log);
@@ -5067,7 +4995,7 @@ export class ListMaker {
 		// Make Sunday's day number 7
 		d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
 		// Get first day of year
-		const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+		const yearStart: any = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
 		// Calculate full weeks to nearest Thursday
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 	}
