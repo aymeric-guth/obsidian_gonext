@@ -4908,6 +4908,33 @@ export class ListMaker {
 		return rs;
 	}
 
+	today() {
+		const rs = [];
+		const pages = this.dv
+			.pages(`"${Paths.Tasks}"`)
+			.where((page) => {
+				const fm = new FrontmatterJS(page);
+				if (fm.at === undefined) {
+					return false;
+				}
+
+				if (fm.getProject() !== "daily") {
+					return false;
+				}
+
+				const now = new Date();
+				if (fm.at.getDay() === now.getDay() && fm.at.getFullYear() === now.getFullYear() && fm.at.getMonth() === now.getMonth()) {
+					return true;
+				}
+
+				return false;
+			})
+			.sort((page) => page.file.frontmatter.at, "desc");
+		console.log(pages);
+		console.log("coucou, tu veux voir ma bite?");
+		return [];
+	}
+
 	planning() {
 		const rs = [];
 		const pages = this.dv
