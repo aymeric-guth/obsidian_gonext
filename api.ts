@@ -4136,7 +4136,7 @@ export class ListMaker {
 		return rs;
 	}
 
-	planning() {
+	planning(lastWeek = 2) {
 		const rs = [];
 		const pages = this.dv
 			.pages(`"${Paths.Tasks}"`)
@@ -4176,6 +4176,9 @@ export class ListMaker {
 		const currentWeekNumber = this.getWeekNumber(now);
 		for (const key of Object.keys(bins)) {
 			const weekNumber = Number(key);
+			if (weekNumber+lastWeek < currentWeekNumber) {
+				continue;
+			}
 			if (weekNumber < currentWeekNumber) {
 				rs.push(["header", 2, `~~week ${key}~~`]);
 			} else if (weekNumber === currentWeekNumber) {
