@@ -736,6 +736,85 @@ export const AutoField = {
 		}
 	},
 
+	goal(dv) {
+		const current = dv.current();
+		const fm = current.file.frontmatter;
+		if (fm === undefined) {
+			console.warn("fm is required");
+			return;
+		}
+
+		// this.autoFieldNeed(dv, fm);
+		// this.autoFieldNeededBy(dv, current);
+		// this.autoFieldTags(dv, fm);
+		//
+		const created_at = new Date(fm.created_at);
+		const logEntries = dv
+			.pages(`"${Paths.Logs}/${fm.uuid}"`)
+			.where((p) => p.type === 6)
+			.sort((k) => k.created_at, "desc");
+
+		const buff = [];
+		for (const entry of logEntries) {
+			const fme = entry.file.frontmatter;
+			const e = [];
+
+			if (fme === undefined || fme.created_at === undefined) {
+				throw new Error(`Invalid frontmatter: ${fme.uuid}`);
+			}
+
+			const start = new Date(fme.created_at);
+			e.push(start.toISOString().slice(0, 10));
+
+			e.push(
+				dv.sectionLink(
+					fme.uuid,
+					"## Content",
+					false,
+					fme.uuid.slice(0, 8),
+				),
+			);
+
+			buff.push(e);
+		}
+
+		const before = new Date(fm.before);
+		// days
+		const timeframe =
+			(before.getTime() - created_at.getTime()) / (1000 * 3600 * 24);
+		let timeframeText = "";
+		// 1 jour
+		// 1 semaine
+		// 2 semaine
+		// 1 mois
+		// 2 mois
+		// 6 mois
+		// 1 an
+		// 2 ans
+		// 5 ans
+		dv.header(3, "Timeframe");
+		if (timeframe > 0 && timeframe < 30) {
+			timeframeText = "runaway";
+		} else if (timeframe < 60) {
+			timeframeText = "10,000 feet";
+		} else if (timeframe < 360) {
+			timeframeText = "20,000 feet";
+		} else if (timeframe < 720) {
+			timeframeText = "30,000 feet";
+		} else if (timeframe < 1080) {
+			timeframeText = "40,000 feet";
+		} else {
+			timeframeText = "50,000 feet";
+		}
+
+		dv.paragraph(timeframeText);
+
+		if (buff.length > 0) {
+			dv.header(2, "Reviews");
+			dv.table(["reviewed_at", "uuid"], buff);
+		}
+	},
+
 	calendar(dv) {
 		const current = dv.current().file.frontmatter;
 		const currentAt = new Date(current.at);
@@ -981,6 +1060,49 @@ export const Renderer = {
 
 		dv.table(cols, buff);
 		// Math.round((totalTime / (1000 * 60 * 60)) * 10) / 10,
+	},
+
+	goal(dv, data) {
+		const buff = [];
+		for (const fm of data) {
+			const created_at = fm.createdAt;
+			const logEntries = dv
+				.pages(`"${Paths.Logs}/${fm.uuid}"`)
+				.where((p) => p.type === 6)
+				.sort((k) => k.created_at, "desc");
+			const before = new Date(fm.fm.before);
+
+			const timeframe =
+				(before.getTime() - created_at.getTime()) / (1000 * 3600 * 24);
+			let timeframeText = "";
+			if (timeframe > 0 && timeframe < 30) {
+				timeframeText = "runaway";
+			} else if (timeframe < 60) {
+				timeframeText = "10,000 feet";
+			} else if (timeframe < 360) {
+				timeframeText = "20,000 feet";
+			} else if (timeframe < 720) {
+				timeframeText = "30,000 feet";
+			} else if (timeframe < 1080) {
+				timeframeText = "40,000 feet";
+			} else {
+				timeframeText = "50,000 feet";
+			}
+
+			buff.push([
+				before.toISOString().slice(0, 10),
+				dv.sectionLink(
+					fm.uuid,
+					"## Content",
+					false,
+					fm.uuid.slice(0, 8),
+				),
+				fm.getDomain(),
+				timeframeText,
+			]);
+		}
+
+		dv.table(["deadline", "uuid", "domain", "timeframe"], buff);
 	},
 
 	inboxEntry(dv, data) {
@@ -2539,6 +2661,40 @@ export class ListMaker {
 				}
 			}
 		}
+
+		return rs;
+	}
+
+	goals() {
+		const fm = this.frontmatter.getCurrentFrontmatter();
+		const filterBy = new FilterBy(fm);
+		const rs = [];
+		const pages = this.dv.pages(`"${Paths.Goals}"`).where((page) => {
+			const fmp = page.file.frontmatter;
+			if (fmp.status !== "todo") {
+				return false;
+			}
+
+			return true;
+		});
+
+		const buff = [];
+		for (const page of pages) {
+			const p = new FrontmatterJS(page);
+			if (filterBy.filter(page.file.frontmatter)) {
+				continue;
+			}
+
+			buff.push(p);
+		}
+
+		buff.sort((a, b) => {
+			const dta = new Date(a.fm.before);
+			const dtb = new Date(b.fm.before);
+			return dta.getTime() - dtb.getTime();
+		});
+		rs.push(["header", 1, "Goals"]);
+		rs.push(["array", Renderer.goal, buff]);
 
 		return rs;
 	}
