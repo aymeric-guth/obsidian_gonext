@@ -1793,18 +1793,6 @@ export class Frontmatter {
 		return [source, groupBy, filterBy, minSize, maxSize];
 	}
 
-	parseJournal() {
-		const fm = this.getCurrentFrontmatter();
-		if (fm === undefined) {
-			return [[], [], [], [], []];
-		}
-		const [byAreas, byContexts, byLayers, byOrgs, byProjects] =
-			this.parseListByNamespace(fm);
-		const tasks = Helper.getField(fm.tasks, []);
-
-		return [byAreas, byContexts, byLayers, byOrgs, byProjects, tasks];
-	}
-
 	parseTodoList() {
 		const fm = this.getCurrentFrontmatter();
 		if (fm === undefined) {
@@ -3049,8 +3037,6 @@ export class ListMaker {
 
 		const minPriority =
 			fml.min_priority === undefined ? 0 : fml.min_priority;
-		const journal = this.dv.pages(`"${Paths.Journal}"`).array()[0].file
-			.frontmatter.tasks;
 
 		const rs = [];
 		rs.push(["header", 1, project.name]);
@@ -3869,7 +3855,7 @@ export class ListMaker {
 		const currentWeekNumber = this.getWeekNumber(now);
 		for (const key of Object.keys(bins)) {
 			const weekNumber = Number(key);
-			if (weekNumber+lastWeek < currentWeekNumber) {
+			if (weekNumber + lastWeek < currentWeekNumber) {
 				continue;
 			}
 			if (weekNumber < currentWeekNumber) {
@@ -3933,6 +3919,53 @@ export class ListMaker {
 		const yearStart: any = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
 		// Calculate full weeks to nearest Thursday
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+	}
+
+	journal() {
+		const rs = [];
+		const bins = {};
+		const pages = this.dv
+			.pages(`"Journal"`)
+			.where((page) => {
+				const fm = new FrontmatterJS(page);
+				return true;
+			})
+			.sort((page) => page.file.frontmatter.created_at, "desc");
+
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			const d = fm.createdAt.toISOString().slice(0, 10);
+			const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+				fm.createdAt.getDay()
+			];
+			const text = `${d}, ${day}`;
+
+			if (bins[text] === undefined) {
+				bins[text] = [page];
+			} else {
+				bins[text].push(page);
+			}
+		}
+
+		const keys = Object.keys(bins);
+		keys.sort();
+		for (const k of keys.reverse()) {
+			bins[k].sort((a, b) => {
+				const fmA = new FrontmatterJS(a);
+				const fmB = new FrontmatterJS(b);
+				return fmA.createdAt.getTime() - fmB.createdAt.getTime();
+			});
+		}
+
+		for (const k of keys) {
+			rs.push(["header", 2, k]);
+			for (const p of bins[k]) {
+				const fm = new FrontmatterJS(p);
+				rs.push(["paragraph", Renderer.makeLinkShortUUID(this.dv, fm.f)]);
+			}
+		}
+
+		return rs;
 	}
 }
 
@@ -4059,10 +4092,7 @@ export class DvLib {
 				continue;
 			}
 			const fm = task.file.frontmatter;
-			if (
-				fm.type !== this.Task.BASE &&
-				fm.type !== this.Task.DAILY
-			) {
+			if (fm.type !== this.Task.BASE && fm.type !== this.Task.DAILY) {
 				continue;
 			}
 			if (fm.status === this.Status.TODO) {
