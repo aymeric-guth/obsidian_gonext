@@ -3091,29 +3091,55 @@ var ListMaker = class {
     }).sort((page) => page.file.frontmatter.created_at, "desc");
     for (const page of pages) {
       const fm = new FrontmatterJS(page);
-      const d = fm.createdAt.toISOString().slice(0, 10);
-      const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][fm.createdAt.getDay()];
-      const text = `${d}, ${day}`;
-      if (bins[text] === void 0) {
-        bins[text] = [page];
+      const weekNumber = this.getWeekNumber(fm.createdAt);
+      const year = fm.createdAt.getFullYear();
+      if (bins[year] === void 0) {
+        bins[year] = {};
+      }
+      if (bins[year][weekNumber] === void 0) {
+        bins[year][weekNumber] = {};
+      }
+      let tag = "";
+      if (fm.getDomain() !== void 0) {
+        tag = fm.getDomain();
+      } else if (fm.getProject() !== void 0) {
+        tag = fm.getProject();
       } else {
-        bins[text].push(page);
+        tag = "adhoc";
+      }
+      if (bins[year][weekNumber][tag] === void 0) {
+        bins[year][weekNumber][tag] = [page];
+      } else {
+        bins[year][weekNumber][tag].push(page);
       }
     }
-    const keys = Object.keys(bins);
-    keys.sort();
-    for (const k of keys.reverse()) {
-      bins[k].sort((a, b) => {
-        const fmA = new FrontmatterJS(a);
-        const fmB = new FrontmatterJS(b);
-        return fmA.createdAt.getTime() - fmB.createdAt.getTime();
-      });
-    }
-    for (const k of keys) {
-      rs.push(["header", 2, k]);
-      for (const p of bins[k]) {
-        const fm = new FrontmatterJS(p);
-        rs.push(["paragraph", Renderer.makeLinkShortUUID(this.dv, fm.f)]);
+    {
+      const years = Object.keys(bins);
+      years.sort().reverse();
+      for (const year of years) {
+        const weeks = Object.keys(bins[year]);
+        weeks.sort().reverse();
+        rs.push(["header", 2, year]);
+        for (const week of weeks) {
+          const tags = Object.keys(bins[year][week]);
+          tags.sort();
+          rs.push(["header", 3, week]);
+          for (const tag of tags) {
+            rs.push(["header", 4, tag]);
+            bins[year][week][tag].sort((a, b) => {
+              const fmA = new FrontmatterJS(a);
+              const fmB = new FrontmatterJS(b);
+              return fmB.createdAt.getTime() - fmA.createdAt.getTime();
+            });
+            for (const page of bins[year][week][tag]) {
+              const fm = new FrontmatterJS(page);
+              const d = fm.createdAt.toISOString().slice(0, 10);
+              const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][fm.createdAt.getDay()];
+              const text = `${d}, ${day}`;
+              rs.push(["paragraph", Renderer.makeLink(this.dv, fm.f, text)]);
+            }
+          }
+        }
       }
     }
     return rs;
