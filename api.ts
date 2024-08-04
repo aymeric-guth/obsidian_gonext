@@ -63,6 +63,7 @@ class FilterBy {
 class FrontmatterJS {
 	public uuid: string;
 	public version: string;
+	public type: number;
 	public createdAt: Date;
 	public at: Date;
 	public before: Date;
@@ -131,6 +132,7 @@ class FrontmatterJS {
 
 		this.uuid = this.fm.uuid;
 		this.version = this.fm.version;
+		this.type = this.fm.type;
 		this.createdAt = new Date(this.fm.created_at);
 		this.at = this.fm.at !== undefined ? new Date(this.fm.at) : new Date();
 		this.before =
@@ -3741,6 +3743,12 @@ export class ListMaker {
 			if (fmProject.getName() === "adhoc") {
 				bins.active.push(project);
 				continue;
+			} else if (
+				["yearly", "monthly", "weekly", "daily"].contains(
+					fmProject.getName(),
+				)
+			) {
+				continue;
 			}
 
 			const tasks = this.dv
@@ -3966,10 +3974,7 @@ export class ListMaker {
 		const suiviYearly = {};
 		const pages = this.dv
 			.pages(`"Journal"`)
-			.where((page) => {
-				const fm = new FrontmatterJS(page);
-				return true;
-			})
+			.where((page) => true)
 			.sort((page) => page.file.frontmatter.created_at, "desc");
 
 		for (const page of pages) {
@@ -4003,7 +4008,7 @@ export class ListMaker {
 				if (suiviWeekly[year][weekNumber.toString()] === undefined) {
 					suiviWeekly[year][weekNumber.toString()] = [page];
 				} else {
-					suiviMonthly[year][weekNumber.toString()].push(page);
+					suiviWeekly[year][weekNumber.toString()].push(page);
 				}
 				continue;
 			} else if (tag === "monthly") {
@@ -4028,6 +4033,38 @@ export class ListMaker {
 				bins[year][weekNumber.toString()][tag].push(page);
 			}
 		}
+
+		// const logs = this.dv
+		// 	.pages(`"${Paths.Logs}"`)
+		// 	.where((page) => true)
+		// 	.sort((page) => page.file.frontmatter.created_at, "desc");
+		//
+		// for (const log of logs) {
+		// 	const fm = new FrontmatterJS(log);
+		// 	const weekNumber = this.getWeekNumber(fm.createdAt);
+		// 	const year = fm.createdAt.getFullYear();
+		// 	if (bins[year] === undefined) {
+		// 		bins[year] = {};
+		// 	}
+		// 	if (bins[year][weekNumber.toString()] === undefined) {
+		// 		bins[year][weekNumber.toString()] = {};
+		// 	}
+		//
+		// 	let tag = "";
+		// 	if (fm.getDomain() !== undefined) {
+		// 		tag = fm.getDomain();
+		// 	} else if (fm.getProject() !== undefined) {
+		// 		tag = fm.getProject();
+		// 	} else {
+		// 		tag = "adhoc";
+		// 	}
+		//
+		// 	if (bins[year][weekNumber.toString()][tag] === undefined) {
+		// 		bins[year][weekNumber.toString()][tag] = [log];
+		// 	} else {
+		// 		bins[year][weekNumber.toString()][tag].push(log);
+		// 	}
+		// }
 
 		{
 			const years = Object.keys(bins);
@@ -4083,7 +4120,10 @@ export class ListMaker {
 						}
 					}
 
-					if (suiviWeekly[year][week.toString()] === undefined && bins[year][week.toString()] === undefined) {
+					if (
+						suiviWeekly[year][week.toString()] === undefined &&
+						bins[year][week.toString()] === undefined
+					) {
 						continue;
 					}
 
@@ -4120,21 +4160,26 @@ export class ListMaker {
 
 						for (const page of bins[year][week.toString()][tag]) {
 							const fm = new FrontmatterJS(page);
-							const d = fm.createdAt.toISOString().slice(0, 10);
-							const day = [
-								"Sun",
-								"Mon",
-								"Tue",
-								"Wed",
-								"Thu",
-								"Fri",
-								"Sat",
-							][fm.createdAt.getDay()];
-							const text = `${d}, ${day}`;
-							rs.push([
-								"paragraph",
-								Renderer.makeLink(this.dv, fm.f, text),
-							]);
+							if (fm.type === 6) {
+							} else {
+								const d = fm.createdAt
+									.toISOString()
+									.slice(0, 10);
+								const day = [
+									"Sun",
+									"Mon",
+									"Tue",
+									"Wed",
+									"Thu",
+									"Fri",
+									"Sat",
+								][fm.createdAt.getDay()];
+								const text = `${d}, ${day}`;
+								rs.push([
+									"paragraph",
+									Renderer.makeLink(this.dv, fm.f, text),
+								]);
+							}
 						}
 					}
 				}
