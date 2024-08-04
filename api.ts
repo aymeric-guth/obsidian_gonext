@@ -3920,10 +3920,49 @@ export class ListMaker {
 		// Calculate full weeks to nearest Thursday
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 	}
+	getMonth(year, weekNumber) {
+		// Create a date object for the first day of the year
+		const firstDayOfYear = new Date(year, 0, 1);
+
+		// Determine the day of the week for the first day of the year
+		const firstDayOfWeek = firstDayOfYear.getDay();
+
+		// Calculate the number of days to add to the first day of the year
+		// to get to the start of the specified week
+		// Weeks start on Monday; if the first day of the year is a Monday,
+		// no adjustment is needed, otherwise adjust to the next Monday
+		const daysToAdd =
+			(weekNumber - 1) * 7 -
+			firstDayOfWeek +
+			(firstDayOfWeek === 0 ? 1 : 0);
+
+		// Adjust the date to the start of the specified week
+		const weekStartDate = new Date(
+			firstDayOfYear.setDate(firstDayOfYear.getDate() + daysToAdd),
+		);
+
+		// Check if the weekStartDate is on the last day of the month,
+		// if so, move to the next month to round up for a week that spans a month transition
+		if (weekStartDate.getDate() > 24) {
+			weekStartDate.setDate(weekStartDate.getDate() + 7);
+		}
+
+		// Extract the month number (0-11 for Jan-Dec) from the weekStartDate
+		const monthNumber = weekStartDate.getMonth();
+
+		return monthNumber + 1; // Return month number (1-12)
+	}
+
+	getMonthName(monthNumber) {
+		const date = new Date(2000, monthNumber - 1); // Year 2000 is used arbitrarily; any non-leap year will do
+		return date.toLocaleString("default", { month: "long" });
+	}
 
 	journal() {
 		const rs = [];
 		const bins = {};
+		const suiviMonthly = {};
+		const suiviYearly = {};
 		const pages = this.dv
 			.pages(`"Journal"`)
 			.where((page) => {
@@ -3936,13 +3975,17 @@ export class ListMaker {
 			const fm = new FrontmatterJS(page);
 			const weekNumber = this.getWeekNumber(fm.createdAt);
 			const year = fm.createdAt.getFullYear();
-
+			const month = fm.createdAt.getMonth() + 1;
 			if (bins[year] === undefined) {
 				bins[year] = {};
 			}
-			if (bins[year][weekNumber] === undefined) {
-				bins[year][weekNumber] = {};
+			if (bins[year][weekNumber.toString()] === undefined) {
+				bins[year][weekNumber.toString()] = {};
 			}
+			if (suiviMonthly[year] === undefined) {
+				suiviMonthly[year] = {};
+			}
+
 			let tag = "";
 			if (fm.getDomain() !== undefined) {
 				tag = fm.getDomain();
@@ -3951,43 +3994,121 @@ export class ListMaker {
 			} else {
 				tag = "adhoc";
 			}
-			if (bins[year][weekNumber][tag] === undefined) {
-				bins[year][weekNumber][tag] = [page];
+
+			if (tag === "monthly") {
+				if (suiviMonthly[year][month.toString()] === undefined) {
+					suiviMonthly[year][month.toString()] = [page];
+				} else {
+					suiviMonthly[year][month.toString()].push(page);
+				}
+				continue;
+			} else if (tag === "yearly") {
+				if (suiviYearly[year] === undefined) {
+					suiviYearly[year] = [page];
+				} else {
+					suiviYearly[year].push(page);
+				}
+				continue;
+			}
+
+			if (bins[year][weekNumber.toString()][tag] === undefined) {
+				bins[year][weekNumber.toString()][tag] = [page];
 			} else {
-				bins[year][weekNumber][tag].push(page);
+				bins[year][weekNumber.toString()][tag].push(page);
 			}
 		}
 
 		{
 			const years = Object.keys(bins);
+			let lastYear = 9999;
+			let lastMonth = 13;
 			years.sort().reverse();
+
 			for (const year of years) {
-				const weeks = Object.keys(bins[year]);
-				weeks.sort().reverse();
+				// const weeks = Object.keys(bins[year]);
+				// weeks.sort().reverse();
 				rs.push(["header", 2, year]);
 
-				for (const week of weeks) {
+				if (parseInt(year, 10) < lastYear) {
+					lastMonth = 13;
+					lastYear = parseInt(year, 10);
+					if (suiviYearly[year] !== undefined) {
+						for (const page of suiviYearly[year]) {
+							const fm = new FrontmatterJS(page);
+							rs.push([
+								"paragraph",
+								Renderer.makeLinkAlias(this.dv, fm.f),
+							]);
+						}
+					}
+				}
+
+				for (let week = 52; week > 0; week--) {
+					const thisMonth = this.getMonth(year, week);
+
+					if (
+						suiviMonthly[year][thisMonth.toString()] !== undefined
+					) {
+						if (lastMonth !== thisMonth) {
+							lastMonth = thisMonth;
+							rs.push([
+								"header",
+								3,
+								this.getMonthName(lastMonth),
+							]);
+
+							if (suiviMonthly[year][thisMonth] !== undefined) {
+								for (const page of suiviMonthly[year][
+									thisMonth
+								]) {
+									const fm = new FrontmatterJS(page);
+									rs.push([
+										"paragraph",
+										Renderer.makeLinkAlias(this.dv, fm.f),
+									]);
+								}
+								// continue;
+							}
+						}
+					}
+
+					if (bins[year][week.toString()] === undefined) {
+						continue;
+					}
+
 					// domain > project
-					const tags = Object.keys(bins[year][week]);
+					const tags = Object.keys(bins[year][week.toString()]);
 					tags.sort();
-					rs.push(["header", 3, week]);
+					rs.push(["header", 4, week.toString()]);
 
 					for (const tag of tags) {
-						rs.push(["header", 4, tag]);
-						bins[year][week][tag].sort((a, b) => {
+						rs.push(["header", 5, tag]);
+						bins[year][week.toString()][tag].sort((a, b) => {
 							const fmA = new FrontmatterJS(a);
 							const fmB = new FrontmatterJS(b);
-							return fmB.createdAt.getTime() - fmA.createdAt.getTime();
+							return (
+								fmB.createdAt.getTime() -
+								fmA.createdAt.getTime()
+							);
 						});
 
-						for (const page of bins[year][week][tag]) {
+						for (const page of bins[year][week.toString()][tag]) {
 							const fm = new FrontmatterJS(page);
 							const d = fm.createdAt.toISOString().slice(0, 10);
-							const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
-								fm.createdAt.getDay()
-							];
+							const day = [
+								"Sun",
+								"Mon",
+								"Tue",
+								"Wed",
+								"Thu",
+								"Fri",
+								"Sat",
+							][fm.createdAt.getDay()];
 							const text = `${d}, ${day}`;
-							rs.push(["paragraph", Renderer.makeLink(this.dv, fm.f, text)]);
+							rs.push([
+								"paragraph",
+								Renderer.makeLink(this.dv, fm.f, text),
+							]);
 						}
 					}
 				}

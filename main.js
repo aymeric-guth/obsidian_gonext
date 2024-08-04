@@ -3082,9 +3082,28 @@ var ListMaker = class {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil(((d - yearStart) / 864e5 + 1) / 7);
   }
+  getMonth(year, weekNumber) {
+    const firstDayOfYear = new Date(year, 0, 1);
+    const firstDayOfWeek = firstDayOfYear.getDay();
+    const daysToAdd = (weekNumber - 1) * 7 - firstDayOfWeek + (firstDayOfWeek === 0 ? 1 : 0);
+    const weekStartDate = new Date(
+      firstDayOfYear.setDate(firstDayOfYear.getDate() + daysToAdd)
+    );
+    if (weekStartDate.getDate() > 24) {
+      weekStartDate.setDate(weekStartDate.getDate() + 7);
+    }
+    const monthNumber = weekStartDate.getMonth();
+    return monthNumber + 1;
+  }
+  getMonthName(monthNumber) {
+    const date = new Date(2e3, monthNumber - 1);
+    return date.toLocaleString("default", { month: "long" });
+  }
   journal() {
     const rs = [];
     const bins = {};
+    const suiviMonthly = {};
+    const suiviYearly = {};
     const pages = this.dv.pages(`"Journal"`).where((page) => {
       const fm = new FrontmatterJS(page);
       return true;
@@ -3093,11 +3112,15 @@ var ListMaker = class {
       const fm = new FrontmatterJS(page);
       const weekNumber = this.getWeekNumber(fm.createdAt);
       const year = fm.createdAt.getFullYear();
+      const month = fm.createdAt.getMonth() + 1;
       if (bins[year] === void 0) {
         bins[year] = {};
       }
-      if (bins[year][weekNumber] === void 0) {
-        bins[year][weekNumber] = {};
+      if (bins[year][weekNumber.toString()] === void 0) {
+        bins[year][weekNumber.toString()] = {};
+      }
+      if (suiviMonthly[year] === void 0) {
+        suiviMonthly[year] = {};
       }
       let tag = "";
       if (fm.getDomain() !== void 0) {
@@ -3107,36 +3130,98 @@ var ListMaker = class {
       } else {
         tag = "adhoc";
       }
-      if (bins[year][weekNumber][tag] === void 0) {
-        bins[year][weekNumber][tag] = [page];
+      if (tag === "monthly") {
+        if (suiviMonthly[year][month.toString()] === void 0) {
+          suiviMonthly[year][month.toString()] = [page];
+        } else {
+          suiviMonthly[year][month.toString()].push(page);
+        }
+        continue;
+      } else if (tag === "yearly") {
+        if (suiviYearly[year] === void 0) {
+          suiviYearly[year] = [page];
+        } else {
+          suiviYearly[year].push(page);
+        }
+        continue;
+      }
+      if (bins[year][weekNumber.toString()][tag] === void 0) {
+        bins[year][weekNumber.toString()][tag] = [page];
       } else {
-        bins[year][weekNumber][tag].push(page);
+        bins[year][weekNumber.toString()][tag].push(page);
       }
     }
     {
       const years = Object.keys(bins);
+      let lastYear = 9999;
+      let lastMonth = 13;
       years.sort().reverse();
       for (const year of years) {
-        const weeks = Object.keys(bins[year]);
-        weeks.sort().reverse();
         rs.push(["header", 2, year]);
-        for (const week of weeks) {
-          const tags = Object.keys(bins[year][week]);
+        if (parseInt(year, 10) < lastYear) {
+          lastMonth = 13;
+          lastYear = parseInt(year, 10);
+          if (suiviYearly[year] !== void 0) {
+            for (const page of suiviYearly[year]) {
+              const fm = new FrontmatterJS(page);
+              rs.push([
+                "paragraph",
+                Renderer.makeLinkAlias(this.dv, fm.f)
+              ]);
+            }
+          }
+        }
+        for (let week = 52; week > 0; week--) {
+          const thisMonth = this.getMonth(year, week);
+          if (suiviMonthly[year][thisMonth.toString()] !== void 0) {
+            if (lastMonth !== thisMonth) {
+              lastMonth = thisMonth;
+              rs.push([
+                "header",
+                3,
+                this.getMonthName(lastMonth)
+              ]);
+              if (suiviMonthly[year][thisMonth] !== void 0) {
+                for (const page of suiviMonthly[year][thisMonth]) {
+                  const fm = new FrontmatterJS(page);
+                  rs.push([
+                    "paragraph",
+                    Renderer.makeLinkAlias(this.dv, fm.f)
+                  ]);
+                }
+              }
+            }
+          }
+          if (bins[year][week.toString()] === void 0) {
+            continue;
+          }
+          const tags = Object.keys(bins[year][week.toString()]);
           tags.sort();
-          rs.push(["header", 3, week]);
+          rs.push(["header", 4, week.toString()]);
           for (const tag of tags) {
-            rs.push(["header", 4, tag]);
-            bins[year][week][tag].sort((a, b) => {
+            rs.push(["header", 5, tag]);
+            bins[year][week.toString()][tag].sort((a, b) => {
               const fmA = new FrontmatterJS(a);
               const fmB = new FrontmatterJS(b);
               return fmB.createdAt.getTime() - fmA.createdAt.getTime();
             });
-            for (const page of bins[year][week][tag]) {
+            for (const page of bins[year][week.toString()][tag]) {
               const fm = new FrontmatterJS(page);
               const d = fm.createdAt.toISOString().slice(0, 10);
-              const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][fm.createdAt.getDay()];
+              const day = [
+                "Sun",
+                "Mon",
+                "Tue",
+                "Wed",
+                "Thu",
+                "Fri",
+                "Sat"
+              ][fm.createdAt.getDay()];
               const text = `${d}, ${day}`;
-              rs.push(["paragraph", Renderer.makeLink(this.dv, fm.f, text)]);
+              rs.push([
+                "paragraph",
+                Renderer.makeLink(this.dv, fm.f, text)
+              ]);
             }
           }
         }
