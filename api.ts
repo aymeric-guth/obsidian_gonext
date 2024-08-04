@@ -3961,6 +3961,7 @@ export class ListMaker {
 	journal() {
 		const rs = [];
 		const bins = {};
+		const suiviWeekly = {};
 		const suiviMonthly = {};
 		const suiviYearly = {};
 		const pages = this.dv
@@ -3985,6 +3986,9 @@ export class ListMaker {
 			if (suiviMonthly[year] === undefined) {
 				suiviMonthly[year] = {};
 			}
+			if (suiviWeekly[year] === undefined) {
+				suiviWeekly[year] = {};
+			}
 
 			let tag = "";
 			if (fm.getDomain() !== undefined) {
@@ -3995,7 +3999,14 @@ export class ListMaker {
 				tag = "adhoc";
 			}
 
-			if (tag === "monthly") {
+			if (tag == "weekly") {
+				if (suiviWeekly[year][weekNumber.toString()] === undefined) {
+					suiviWeekly[year][weekNumber.toString()] = [page];
+				} else {
+					suiviMonthly[year][weekNumber.toString()].push(page);
+				}
+				continue;
+			} else if (tag === "monthly") {
 				if (suiviMonthly[year][month.toString()] === undefined) {
 					suiviMonthly[year][month.toString()] = [page];
 				} else {
@@ -4072,6 +4083,22 @@ export class ListMaker {
 						}
 					}
 
+					if (suiviWeekly[year][week.toString()] === undefined && bins[year][week.toString()] === undefined) {
+						continue;
+					}
+
+					rs.push(["header", 4, `week ${week.toString()}`]);
+					if (suiviWeekly[year][week.toString()] !== undefined) {
+						for (const page of suiviWeekly[year][week.toString()]) {
+							const fm = new FrontmatterJS(page);
+							rs.push([
+								"paragraph",
+								Renderer.makeLinkAlias(this.dv, fm.f),
+							]);
+						}
+						continue;
+					}
+
 					if (bins[year][week.toString()] === undefined) {
 						continue;
 					}
@@ -4079,7 +4106,6 @@ export class ListMaker {
 					// domain > project
 					const tags = Object.keys(bins[year][week.toString()]);
 					tags.sort();
-					rs.push(["header", 4, week.toString()]);
 
 					for (const tag of tags) {
 						rs.push(["header", 5, tag]);
