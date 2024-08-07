@@ -3726,10 +3726,7 @@ export class ListMaker {
 	}
 
 	projects() {
-		let fml = this.frontmatter.getCurrentFrontmatter();
-		if (fml === undefined) {
-			fml = { inactive: [] };
-		}
+		const fml = { inactive: [] };
 
 		const rs = [];
 		const bins = {
@@ -3982,17 +3979,17 @@ export class ListMaker {
 			const weekNumber = this.getWeekNumber(fm.createdAt);
 			const year = fm.createdAt.getFullYear();
 			const month = fm.createdAt.getMonth() + 1;
-			if (bins[year] === undefined) {
-				bins[year] = {};
+			if (bins[year.toString()] === undefined) {
+				bins[year.toString()] = {};
 			}
-			if (bins[year][weekNumber.toString()] === undefined) {
-				bins[year][weekNumber.toString()] = {};
+			if (bins[year.toString()][weekNumber.toString()] === undefined) {
+				bins[year.toString()][weekNumber.toString()] = {};
 			}
-			if (suiviMonthly[year] === undefined) {
-				suiviMonthly[year] = {};
+			if (suiviMonthly[year.toString()] === undefined) {
+				suiviMonthly[year.toString()] = {};
 			}
-			if (suiviWeekly[year] === undefined) {
-				suiviWeekly[year] = {};
+			if (suiviWeekly[year.toString()] === undefined) {
+				suiviWeekly[year.toString()] = {};
 			}
 
 			let tag = "";
@@ -4005,32 +4002,32 @@ export class ListMaker {
 			}
 
 			if (tag == "weekly") {
-				if (suiviWeekly[year][weekNumber.toString()] === undefined) {
-					suiviWeekly[year][weekNumber.toString()] = [page];
+				if (suiviWeekly[year.toString()][weekNumber.toString()] === undefined) {
+					suiviWeekly[year.toString()][weekNumber.toString()] = [page];
 				} else {
-					suiviWeekly[year][weekNumber.toString()].push(page);
+					suiviWeekly[year.toString()][weekNumber.toString()].push(page);
 				}
 				continue;
 			} else if (tag === "monthly") {
-				if (suiviMonthly[year][month.toString()] === undefined) {
-					suiviMonthly[year][month.toString()] = [page];
+				if (suiviMonthly[year.toString()][month.toString()] === undefined) {
+					suiviMonthly[year.toString()][month.toString()] = [page];
 				} else {
-					suiviMonthly[year][month.toString()].push(page);
+					suiviMonthly[year.toString()][month.toString()].push(page);
 				}
 				continue;
 			} else if (tag === "yearly") {
-				if (suiviYearly[year] === undefined) {
-					suiviYearly[year] = [page];
+				if (suiviYearly[year.toString()] === undefined) {
+					suiviYearly[year.toString()] = [page];
 				} else {
-					suiviYearly[year].push(page);
+					suiviYearly[year.toString()].push(page);
 				}
 				continue;
 			}
 
-			if (bins[year][weekNumber.toString()][tag] === undefined) {
-				bins[year][weekNumber.toString()][tag] = [page];
+			if (bins[year.toString()][weekNumber.toString()][tag] === undefined) {
+				bins[year.toString()][weekNumber.toString()][tag] = [page];
 			} else {
-				bins[year][weekNumber.toString()][tag].push(page);
+				bins[year.toString()][weekNumber.toString()][tag].push(page);
 			}
 		}
 
