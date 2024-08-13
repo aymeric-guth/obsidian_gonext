@@ -879,9 +879,15 @@ export const AutoField = {
 				}
 
 				const now = new Date();
+				let fmAtShort = undefined;
+				try {
+					fmAtShort = fm.at.toISOString().slice(0, 10);
+				} catch {
+					throw new Error(`${fm.uuid}`);
+				}
 				if (
 					page.file.frontmatter.at !== undefined &&
-					fm.at.toISOString().slice(0, 10) === currentAtShort
+					fmAtShort === currentAtShort
 				) {
 					return true;
 				}
@@ -1494,7 +1500,11 @@ export const Renderer = {
 				}
 
 				start = new Date(fme.created_at);
-				e.push(start.toISOString().slice(0, 10));
+				try {
+					e.push(start.toISOString().slice(0, 10));
+				} catch {
+					console.error(entry.uuid);
+				}
 				if (fme.done_at === undefined) {
 					stop = Date.now();
 				} else {
@@ -3628,36 +3638,32 @@ export class ListMaker {
 			buff.push(e);
 		}
 
-		const logs = this.dv.pages(`"${Paths.Logs}"`).where((p) => {
-			if (p.type !== Types.Log) {
-				return false;
-			}
-
-			const f = p.file;
-			const createdAt = this.frontmatter.getCreatedAt(f);
-			const now = new Date();
-			if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
-				return false;
-			}
-
-			if (p.reviewed !== undefined && p.reviewed >= 1) {
-				return false;
-			}
-
-			const pages = this.dv
-				.pages(`"${Paths.Tasks}/${f.frontmatter.parent_id}"`)
-				.array();
-			if (pages.length !== 1) {
-				return false;
-			}
-
-			// const parent = pages[0];
-			// if (parent.type !== Types.Media) {
-			// 	return false;
-			// }
-
-			return true;
-		});
+		// const logs = this.dv.pages(`"${Paths.Logs}"`).where((p) => {
+		// 	if (p.type !== Types.Log) {
+		// 		return false;
+		// 	}
+		//
+		// 	const f = p.file;
+		// 	const createdAt = this.frontmatter.getCreatedAt(f);
+		// 	const now = new Date();
+		// 	if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
+		// 		return false;
+		// 	}
+		//
+		// 	if (p.reviewed !== undefined && p.reviewed >= 1) {
+		// 		return false;
+		// 	}
+		//
+		// 	const pages = this.dv
+		// 		.pages(`"${Paths.Tasks}/${f.frontmatter.parent_id}"`)
+		// 		.array();
+		// 	if (pages.length !== 1) {
+		// 		return false;
+		// 	}
+		//
+		// 	return true;
+		// });
+		const logs = [];
 
 		for (const e of logs) {
 			const fm = e.file.frontmatter;
@@ -4002,14 +4008,24 @@ export class ListMaker {
 			}
 
 			if (tag == "weekly") {
-				if (suiviWeekly[year.toString()][weekNumber.toString()] === undefined) {
-					suiviWeekly[year.toString()][weekNumber.toString()] = [page];
+				if (
+					suiviWeekly[year.toString()][weekNumber.toString()] ===
+					undefined
+				) {
+					suiviWeekly[year.toString()][weekNumber.toString()] = [
+						page,
+					];
 				} else {
-					suiviWeekly[year.toString()][weekNumber.toString()].push(page);
+					suiviWeekly[year.toString()][weekNumber.toString()].push(
+						page,
+					);
 				}
 				continue;
 			} else if (tag === "monthly") {
-				if (suiviMonthly[year.toString()][month.toString()] === undefined) {
+				if (
+					suiviMonthly[year.toString()][month.toString()] ===
+					undefined
+				) {
 					suiviMonthly[year.toString()][month.toString()] = [page];
 				} else {
 					suiviMonthly[year.toString()][month.toString()].push(page);
@@ -4024,7 +4040,9 @@ export class ListMaker {
 				continue;
 			}
 
-			if (bins[year.toString()][weekNumber.toString()][tag] === undefined) {
+			if (
+				bins[year.toString()][weekNumber.toString()][tag] === undefined
+			) {
 				bins[year.toString()][weekNumber.toString()][tag] = [page];
 			} else {
 				bins[year.toString()][weekNumber.toString()][tag].push(page);
