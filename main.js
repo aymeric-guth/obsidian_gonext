@@ -744,36 +744,6 @@ var AutoField = {
       dv.table(["reviewed_at", "uuid"], buff);
     }
   },
-  calendar(dv) {
-    const current = dv.current().file.frontmatter;
-    const currentAt = new Date(current.at);
-    const currentAtShort = currentAt.toISOString().slice(0, 10);
-    const pages = dv.pages(`"Calendar"`).where((page) => {
-      const fm = page.file.frontmatter;
-      if (fm.completed === true) {
-        return false;
-      }
-      const now = new Date();
-      if (fm.date !== currentAtShort) {
-        return false;
-      }
-      if (fm.completed === false) {
-        return true;
-      } else {
-        return true;
-      }
-    }).sort((k) => k.at, "asc");
-    if (pages.length === 0) {
-      return;
-    }
-    const buff = [];
-    for (const page of pages) {
-      const fm = page.file.frontmatter;
-      buff.push([`${fm.startTime} - ${fm.endTime}`, `${fm.title}`]);
-    }
-    console.log(pages.length);
-    dv.table(["at", "title"], buff);
-  },
   daily(dv) {
     const current = dv.current().file.frontmatter;
     const currentAt = new Date(current.at);
@@ -3242,6 +3212,153 @@ var ListMaker = class {
                 rs.push([
                   "paragraph",
                   Renderer.makeLink(this.dv, fm.f, text)
+                ]);
+              }
+            }
+          }
+        }
+      }
+    }
+    return rs;
+  }
+  calendar() {
+    const rs = [];
+    const bins = {};
+    const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+      const fm = new FrontmatterJS(page);
+      if (fm.fm.at === void 0 && fm.fm.before === void 0 && fm.fm.after === void 0) {
+        return false;
+      }
+      if (fm.fm.status !== "todo") {
+        return false;
+      }
+      if (fm.getProject() === "daily") {
+        return false;
+      }
+      console.log(`return true: ${fm.uuid}`);
+      return true;
+    });
+    for (const page of pages) {
+      const fm = new FrontmatterJS(page);
+      let year = 0;
+      let month = 0;
+      let day = 0;
+      if (fm.fm.before !== void 0) {
+        year = fm.before.getFullYear();
+        month = fm.before.getMonth();
+        day = fm.before.getUTCDate();
+      } else if (fm.fm.at !== void 0) {
+        year = fm.at.getFullYear();
+        month = fm.at.getMonth();
+        day = fm.at.getUTCDate();
+      } else if (fm.after !== void 0) {
+        year = fm.after.getFullYear();
+        month = fm.after.getMonth();
+        day = fm.after.getUTCDate();
+      } else {
+        throw new Error();
+      }
+      if (bins[year] === void 0) {
+        bins[year] = {};
+      }
+      if (bins[year][month] === void 0) {
+        bins[year][month] = {};
+      }
+      if (bins[year][month][day] === void 0) {
+        bins[year][month][day] = {};
+      }
+      if (bins[year][month][day]["at"] === void 0) {
+        bins[year][month][day]["at"] = [];
+      }
+      if (bins[year][month][day]["before"] === void 0) {
+        bins[year][month][day]["before"] = [];
+      }
+      if (bins[year][month][day]["after"] === void 0) {
+        bins[year][month][day]["after"] = [];
+      }
+      if (fm.fm.before !== void 0) {
+        bins[year][month][day]["before"].push(page);
+      } else if (fm.fm.at !== void 0) {
+        bins[year][month][day]["at"].push(page);
+      } else {
+        bins[year][month][day]["after"].push(page);
+      }
+    }
+    {
+      const years = Object.keys(bins);
+      years.sort();
+      for (const year of years) {
+        rs.push(["header", 2, year]);
+        const months = Object.keys(bins[year]);
+        months.sort();
+        for (const month of months) {
+          rs.push([
+            "header",
+            3,
+            `${["January", "Febuary", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][month]}`
+          ]);
+          const days = Object.keys(bins[year][month]);
+          days.sort();
+          for (const day of days) {
+            const weeks = [
+              "Sun",
+              "Mon",
+              "Tue",
+              "Wed",
+              "Thu",
+              "Fri",
+              "Sat"
+            ];
+            const before = bins[year][month][day]["before"];
+            const at = bins[year][month][day]["at"];
+            const after = bins[year][month][day]["after"];
+            if (before.length > 0) {
+              for (const page of before) {
+                const fm = new FrontmatterJS(page);
+                const text = `before: ${weeks[fm.before.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
+                rs.push([
+                  "paragraph",
+                  Renderer.makeLink(
+                    this.dv,
+                    fm.f,
+                    text,
+                    "Task"
+                  )
+                ]);
+              }
+            }
+            if (at.length > 0) {
+              at.sort((a, b) => {
+                const fmA = new FrontmatterJS(a);
+                const fmB = new FrontmatterJS(b);
+                return fmB.at.getTime() - fmA.at.getTime();
+              });
+              for (const page of at) {
+                const fm = new FrontmatterJS(page);
+                const text = `at: ${weeks[fm.at.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
+                rs.push([
+                  "paragraph",
+                  Renderer.makeLink(
+                    this.dv,
+                    fm.f,
+                    text,
+                    "Task"
+                  )
+                ]);
+              }
+            }
+            if (after.length > 0) {
+              for (const page of after) {
+                const fm = new FrontmatterJS(page);
+                const text = ` after: ${weeks[fm.after.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
+                rs.push([
+                  "paragraph",
+                  Renderer.makeLink(
+                    this.dv,
+                    fm.f,
+                    text,
+                    "Task"
+                  )
                 ]);
               }
             }
