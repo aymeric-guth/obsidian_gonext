@@ -1528,6 +1528,20 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
+	projects(dv, pages) {
+		const cols = ["name",];
+		const buff = [];
+
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			buff.push([Renderer.makeLink(dv, page.file, fm.getName())]);
+			// dv.paragraph(Renderer.makeLink(dv, page.file, fm.getName()));
+		}
+
+		console.log(buff);
+		dv.table(cols, buff);
+	},
+
 	basicDoneTaskWithLogs(dv, data) {
 		const cols = [
 			"uuid",
@@ -3755,10 +3769,10 @@ export class ListMaker {
 			}
 		}
 
-		// rs.push(["header", 1, "Projects"]);
-		rs.push(["array", Renderer.basicRelation, bins.active]);
+		rs.push(["header", 2, "Active"]);
+		rs.push(["array", Renderer.projects, bins.active]);
 		rs.push(["header", 2, "Inactive"]);
-		rs.push(["array", Renderer.basicRelation, bins.inactive]);
+		rs.push(["array", Renderer.projects, bins.inactive]);
 
 		return rs;
 	}
