@@ -1861,38 +1861,6 @@ export class NoteHelper {
 		return true;
 	}
 
-	isDoableShiet(task) {
-		const fm = task.file.frontmatter;
-		if (fm.status !== Status.Todo) {
-			return false;
-		}
-
-		if (fm.after !== undefined) {
-			const after = new Date(fm.after);
-			if (Date.now() <= after.getTime()) {
-				return false;
-			}
-		}
-
-		if (fm.at !== undefined) {
-			const at = new Date(fm.at);
-			if (Date.now() <= at.getTime()) {
-				return false;
-			}
-		}
-
-		const deps = fm.needs;
-		if (deps === undefined || deps.length === 0) {
-			return true;
-		}
-
-		if (this.hasPendingDependencies(deps)) {
-			return false;
-		}
-
-		return true;
-	}
-
 	hasPendingDependencies(deps) {
 		for (const dep of deps) {
 			const task = this.dv.pages(`"${Paths.Tasks}/${dep}"`).array();
@@ -2750,88 +2718,6 @@ export class ListMaker {
 		};
 	}
 
-	contextTasksSheet(dv) {
-		// const project = this.projectTasksSheetRelationFrontmatter(dv);
-		const minPriority = 0;
-
-		const rs = [];
-		// rs.push(["header", 2, project.name]);
-
-		const bins = {
-			doable: [],
-			waiting: [],
-			journal: [],
-		};
-
-		// const tasks = this.getProjectTasks(project.name);
-		const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
-			const fm = page.file.frontmatter;
-			if (page.type !== Types.Task && page.type !== Types.Media) {
-				return false;
-			}
-
-			if (fm.status === Status.Done) {
-				return false;
-			}
-
-			const fmjs = new FrontmatterJS(page);
-			if (fmjs.getContext() !== `outside`) {
-				return false;
-			}
-
-			return true;
-		});
-
-		for (const task of pages) {
-			const fm = task.file.frontmatter;
-
-			if (fm.priority !== undefined && fm.priority < minPriority) {
-				continue;
-			}
-
-			if (this.noteHelper.isDoable(task)) {
-				bins.doable.push(task);
-			} else if (fm.status === Status.Todo) {
-				bins.waiting.push(task);
-			} else {
-				continue;
-			}
-		}
-
-		if (bins.doable.length > 0) {
-			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
-			bins.doable.sort(
-				(a, b) =>
-					(a.file.frontmatter.priority -
-						b.file.frontmatter.priority) *
-					-1,
-			);
-			rs.push(["array", Renderer.basicTaskJournal, bins.doable]);
-		}
-
-		// console.log(bins.waiting);
-		if (bins.waiting.length > 0) {
-			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
-			const buff = [];
-			for (const task of bins.waiting) {
-				const fm = task.file.frontmatter;
-				// if (fm.needs !== undefined && fm.needs.length > 0) {
-				// 	fm.cause = fm.needs;
-				// } else if (fm.after !== undefined) {
-				// 	fm.cause = `after: ${fm.after}`;
-				// } else {
-				// 	fm.cause = "unknown";
-				// }
-				fm.cause = "unknown";
-				buff.push(task);
-			}
-
-			rs.push(["array", Renderer.waitingTask, buff]);
-		}
-
-		return rs;
-	}
-
 	projectTasksSheetRelation(dv) {
 		const project = this.projectTasksSheetRelationFrontmatter(dv);
 		const minPriority = 0;
@@ -2850,7 +2736,9 @@ export class ListMaker {
 				return false;
 			}
 
-			if (project.name === "adhoc" && fm.getProject() === undefined) {
+			if (["daily", "weekly", "monthly"].contains(project.name)) {
+				return false;
+			} else if (project.name === "adhoc" && fm.getProject() === undefined) {
 				page.file.frontmatter.project = "adhoc";
 				return true;
 			} else if (project.name === fm.getProject()) {
@@ -2863,7 +2751,7 @@ export class ListMaker {
 		for (const page of pages) {
 			const fm = new FrontmatterJS(page);
 
-			if (this.noteHelper.isDoableShiet(page)) {
+			if (this.noteHelper.isDoable(page)) {
 				if (fm.fm.priority > 0) {
 					bins.nextAction.push(page);
 				} else {
@@ -2992,132 +2880,6 @@ export class ListMaker {
 		for (const date of keys.reverse()) {
 			rs.push(["header", 3, date]);
 			rs.push(["array", Renderer.projectLogs, buff[date]]);
-		}
-
-		return rs;
-	}
-	projectTasksSheet(dv) {
-		const project = this.frontmatter.projectParseMeta(dv);
-		const fml = this.frontmatter.getCurrentFrontmatter();
-		if (fml === undefined) {
-			throw new Error(`Invalid frontmatter, cannot proceed`);
-		}
-
-		const minPriority =
-			fml.min_priority === undefined ? 0 : fml.min_priority;
-
-		const rs = [];
-		rs.push(["header", 1, project.name]);
-
-		const bins = {
-			doable: [],
-			waiting: [],
-			journal: [],
-			maybe: [],
-			praxis: [],
-		};
-
-		const tasks = this.getProjectTasks(project.name);
-
-		for (const task of tasks) {
-			const fm = task.file.frontmatter;
-
-			if (fm.priority !== undefined && fm.priority < minPriority) {
-				continue;
-			}
-
-			if (this.noteHelper.isDoable(task)) {
-				bins.doable.push(task);
-			} else if (fm.status === Status.Todo) {
-				bins.waiting.push(task);
-			} else {
-				bins.maybe.push(task);
-			}
-		}
-
-		{
-			let toReview = 0;
-			const logs = this.getProjectLogs(dv, project);
-			for (const log of logs) {
-				if (log.file.frontmatter.reviewed < 1) {
-					toReview += 1;
-				}
-			}
-			rs.push(["header", 2, `Pending Logs (${toReview})`]);
-			if (toReview > 0) {
-				rs.push([
-					"paragraph",
-					`[[${Paths.Projects}/${project.name === "adhoc" ? "ad hoc" : project.name
-					}/logs]]`,
-				]);
-			}
-		}
-		// groupBy layer, ??
-		if (bins.doable.length > 0) {
-			rs.push(["header", 2, `Next Actions (${bins.doable.length})`]);
-			bins.doable.sort(
-				(a, b) =>
-					(a.file.frontmatter.priority -
-						b.file.frontmatter.priority) *
-					-1,
-			);
-			rs.push(["array", Renderer.basicTaskJournal, bins.doable]);
-		}
-
-		if (bins.waiting.length > 0) {
-			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
-			const buff = [];
-			for (const task of bins.waiting) {
-				const fm = task.file.frontmatter;
-				if (fm.needs !== undefined && fm.needs.length > 0) {
-					fm.cause = fm.needs;
-				} else if (fm.after !== undefined) {
-					fm.cause = `after: ${fm.after}`;
-				} else {
-					fm.cause = "unknown";
-				}
-				buff.push(task);
-			}
-
-			rs.push(["array", Renderer.waitingTask, buff]);
-		}
-
-		if (bins.maybe.length > 0) {
-			rs.push(["header", 2, `Maybe`]);
-			bins.maybe.sort(
-				(a, b) =>
-					(a.file.frontmatter.priority -
-						b.file.frontmatter.priority) *
-					-1,
-			);
-			rs.push(["array", Renderer.readyTask, bins.maybe]);
-			// rs.push(["array", Renderer.basicTask, bins.doable]);
-		}
-
-		const pages = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where((page) => {
-				const fm = page.file.frontmatter;
-				if (page.type !== Types.Praxis) {
-					return false;
-				}
-				if (
-					Helper.getProject(fm) !==
-					`${Namespace.Project}/${project.name === "adhoc" ? "none" : project.name
-					}`
-				) {
-					return false;
-				}
-				if (fm.status === Status.Done) {
-					return false;
-				}
-				return true;
-			})
-			.array();
-
-		if (pages.length > 0) {
-			rs.push(["header", 3, "Praxis"]);
-			rs.push(["array", Renderer.praxisBase, pages]);
 		}
 
 		return rs;
@@ -3268,123 +3030,6 @@ export class ListMaker {
 		for (const date of keys.reverse()) {
 			rs.push(["header", 3, date]);
 			rs.push(["array", Renderer.projectLogs, buff[date]]);
-		}
-
-		return rs;
-	}
-
-	allTodoProjects() {
-		const [byAreas, byContexts, byLayers, byOrgs, byProjects, minPriority] =
-			this.frontmatter.parseTodoList();
-		const fml = this.frontmatter.getCurrentFrontmatter();
-		if (fml === undefined) {
-			throw new Error(`Invalid frontmatter, cannot proceed`);
-		}
-
-		// undefined | null, empty arr, arr 1+ valeurs str
-		const filterBy = fml.filter_by;
-
-		// undefined, null || string || empty arr || arr.len 1+[str]
-		let groupBy = fml.group_by;
-		if (typeof groupBy === "undefined" || groupBy === "") {
-			groupBy = "";
-		} else if (typeof groupBy === "string") {
-		} else {
-			throw new Error(`Unsuported implementation groupBy: '${groupBy}'`);
-		}
-
-		const today = this.dv.pages(`"${Paths.Journal}"`)[0].file.frontmatter
-			.tasks;
-		const projects = this.noteHelper.getNamespaceContent(Namespace.Project);
-		projects.sort();
-		const rs = [];
-		rs.push(["header", 1, "Projects"]);
-
-		for (const project of projects) {
-			const bins = [];
-			if (project === "none") {
-				continue;
-			}
-
-			const tasks = this.dv
-				.pages(`#${Namespace.Project}/${project}`)
-				.where(
-					(page) =>
-						page.type === Types.Task && page.status === Status.Todo,
-				);
-			let elCount = 0;
-
-			for (const task of tasks) {
-				const fm = task.file.frontmatter;
-				if (
-					filterBy !== undefined &&
-					filterBy !== null &&
-					filterBy.length > 0
-				) {
-					if (!this.nameInNamespace(fm, filterBy)) {
-						continue;
-					}
-				}
-
-				if (today.contains(fm.uuid)) {
-					continue;
-				}
-
-				if (fm.priority !== undefined && fm.priority < minPriority) {
-					continue;
-				}
-
-				if (this.noteHelper.isDoable(task)) {
-					let by = groupBy;
-					if (groupBy !== "") {
-						by = Helper.getTag(
-							task.file.frontmatter,
-							groupBy,
-							true,
-						);
-						if (by === undefined) {
-							by = "";
-						}
-					}
-
-					if (bins[by] === undefined) {
-						bins[by] = [task];
-					} else {
-						bins[by].push(task);
-					}
-					elCount++;
-				}
-			}
-
-			if (elCount === 0) {
-				continue;
-			}
-
-			rs.push(["header", 2, project]);
-			if (groupBy === "") {
-				bins[""].sort(
-					(a, b) =>
-						a.file.frontmatter.priority -
-						b.file.frontmatter.priority,
-				);
-				rs.push(["array", Renderer.readyTask, bins[""]]);
-			} else {
-				const keys = Object.keys(bins);
-				keys.sort();
-				for (const key of keys) {
-					// add a header if key != for default value
-					if (key !== Helper.getTag({ tags: [] }, groupBy)) {
-						rs.push(["header", 3, key]);
-					}
-
-					bins[key].sort(
-						(a, b) =>
-							a.file.frontmatter.priority -
-							b.file.frontmatter.priority,
-					);
-					rs.push(["array", Renderer.readyTask, bins[key]]);
-				}
-			}
 		}
 
 		return rs;
@@ -5117,28 +4762,6 @@ export class DvLib {
 			.sort((k) => k.created_at, "asc");
 
 		const buff = [];
-
-		for (const entry of logs) {
-			// console.log(entry.file);
-			// const fm = task.file.frontmatter;
-			// if (ignore.contains(fm.uuid)) {
-			// 	continue;
-			// }
-			// if (today.contains(fm.uuid)) {
-			// 	continue;
-			// }
-			// if (fm.priority !== undefined && fm.priority < minPriority) {
-			// 	continue;
-			// }
-			// if (lib.isDoable(dv, task)) {
-			// 	buff.push(task);
-			// }
-		}
-
-		// if (tasks.length > 0) {
-		// 	dv.header(2, "AdHoc");
-		// 	lib.renderBaseAsArray(dv, buff.reverse());
-		// }
 
 		const arr = [];
 		logs.forEach((entry) => {
