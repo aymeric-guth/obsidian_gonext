@@ -1529,16 +1529,14 @@ export const Renderer = {
 	},
 
 	projects(dv, pages) {
-		const cols = ["name",];
+		const cols = ["name"];
 		const buff = [];
 
 		for (const page of pages) {
 			const fm = new FrontmatterJS(page);
 			buff.push([Renderer.makeLink(dv, page.file, fm.getName())]);
-			// dv.paragraph(Renderer.makeLink(dv, page.file, fm.getName()));
 		}
 
-		console.log(buff);
 		dv.table(cols, buff);
 	},
 
@@ -2184,18 +2182,18 @@ export class ListMaker {
 
 	projectTasksSheetRelationFrontmatter(dv) {
 		const current = dv.current();
-		// dconst fml = current.file.frontmatter;
 		const fm = new FrontmatterJS(current);
 
 		return {
 			name: fm.getName(),
 			uuid: fm.uuid,
+			active:
+				fm.active === undefined || fm.active === true ? true : false,
 		};
 	}
 
 	projectTasksSheetRelation(dv) {
 		const project = this.projectTasksSheetRelationFrontmatter(dv);
-		const minPriority = 0;
 
 		const rs = [];
 		const bins = {
@@ -2213,7 +2211,10 @@ export class ListMaker {
 
 			if (["daily", "weekly", "monthly"].contains(project.name)) {
 				return false;
-			} else if (project.name === "adhoc" && fm.getProject() === undefined) {
+			} else if (
+				project.name === "adhoc" &&
+				fm.getProject() === undefined
+			) {
 				page.file.frontmatter.project = "adhoc";
 				return true;
 			} else if (project.name === fm.getProject()) {
@@ -2808,8 +2809,6 @@ export class ListMaker {
 	}
 
 	projects() {
-		const fml = { inactive: [] };
-
 		const rs = [];
 		const bins = {
 			active: [],
@@ -2819,7 +2818,10 @@ export class ListMaker {
 		const pages = this.dv.pages(`"Projects"`).sort((k) => k.name, "asc");
 		for (const project of pages) {
 			const fmProject = new FrontmatterJS(project);
-			if (fmProject.getName() === "adhoc") {
+			if (fmProject.fm.active === false) {
+				bins.inactive.push(project);
+				continue;
+			} else if (fmProject.getName() === "adhoc") {
 				bins.active.push(project);
 				continue;
 			} else if (
@@ -2838,13 +2840,12 @@ export class ListMaker {
 					}
 
 					const fmTask = new FrontmatterJS(page);
-					if (fmTask.getProject() !== fmProject.getName()) {
+					if (fmTask.fm.priority === 0) {
 						return false;
 					}
 
 					if (
-						fmTask.fm.status === "todo" ||
-						fmTask.fm.status === "doing"
+						["todo", "doing", "waiting"].contains(fmTask.fm.status)
 					) {
 						return true;
 					}
@@ -2852,22 +2853,10 @@ export class ListMaker {
 					return false;
 				});
 
-			let nextActionCount = 0;
-			for (const task of tasks) {
-				// console.log(task.file.frontmatter.priority);
-				if (task.file.frontmatter.priority === 9) {
-					nextActionCount++;
-				}
-			}
-
-			if (
-				tasks.length === 0 ||
-				nextActionCount === 0 ||
-				fml.inactive.contains(fmProject.getName())
-			) {
-				bins.inactive.push(project);
-			} else {
+			if (tasks.length > 0) {
 				bins.active.push(project);
+			} else {
+				bins.inactive.push(project);
 			}
 		}
 
@@ -3301,7 +3290,7 @@ export class ListMaker {
 				return false;
 			}
 
-			console.log(`return true: ${fm.uuid}`)
+			console.log(`return true: ${fm.uuid}`);
 			return true;
 		});
 
@@ -3448,6 +3437,116 @@ export class ListMaker {
 		}
 
 		return rs;
+	}
+
+	globalTaskList(pages) {
+		const rs = [];
+		const bins = {};
+
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			if (fm.getProject() === undefined) {
+				fm.projects = ["adhoc"];
+			}
+
+			if (bins[fm.getProject()] === undefined) {
+				bins[fm.getProject()] = [page];
+			} else {
+				bins[fm.getProject()].push(page);
+			}
+		}
+
+		const projects = Object.keys(bins);
+		projects.sort();
+		for (const project of projects) {
+			const tasks = bins[project];
+			tasks.sort((a, b) => {
+				const fmA = new FrontmatterJS(a);
+				const fmB = new FrontmatterJS(b);
+
+				return fmB.fm.priority - fmA.fm.priority;
+			});
+
+			rs.push(["header", 2, `${project}`]);
+			rs.push(["array", Renderer.basicTaskJournal, tasks]);
+		}
+
+		return rs;
+	}
+
+	nextActions(dv) {
+		const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			if (
+				["daily", "weekly", "monthly", "yearly"].contains(
+					fm.getProject(),
+				)
+			) {
+				return false;
+			}
+
+			// exclude tasks with unfulfilled dependencies
+			if (!this.noteHelper.isDoable(page)) {
+				return false;
+			}
+
+			// exclude someday maybe tasks
+			if (fm.fm.priority === 0) {
+				return false;
+			}
+
+			return true;
+		});
+
+		return this.globalTaskList(pages);
+	}
+
+	waitingFor(dv) {
+		const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			if (
+				["daily", "weekly", "monthly", "yearly"].contains(
+					fm.getProject(),
+				)
+			) {
+				return false;
+			}
+
+			if (!["todo", "waiting"].contains(fm.fm.status)) {
+				return false;
+			}
+
+			// exclude tasks with fulfilled dependencies and someday maybe
+			if (this.noteHelper.isDoable(page) || fm.fm.priority === 0) {
+				return false;
+			}
+
+			return true;
+		});
+
+		return this.globalTaskList(pages);
+	}
+
+	somedayMaybe(dv) {
+		const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			if (
+				["daily", "weekly", "monthly", "yearly"].contains(
+					fm.getProject(),
+				)
+			) {
+				return false;
+			}
+
+			// exclude tasks with unfulfilled dependencies
+			if (!this.noteHelper.isDoable(page) || fm.fm.priority > 0) {
+				return false;
+			}
+
+			return true;
+		});
+
+		return this.globalTaskList(pages);
 	}
 }
 
