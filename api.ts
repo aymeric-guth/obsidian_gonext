@@ -2236,7 +2236,7 @@ export class ListMaker {
 			name: fm.getName(),
 			uuid: fm.uuid,
 			active:
-				fm.active === undefined || fm.active === true ? true : false,
+				fm.fm.active === undefined || fm.fm.active === true ? true : false,
 		};
 	}
 
