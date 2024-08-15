@@ -27,7 +27,6 @@ class FilterBy {
 			Assert.True(root.length === 2, `Invalid tag: '${a}'`);
 			const parent =
 				root[0].slice(0, 1) === "!" ? root[0].slice(1) : root[0];
-			// console.log(parent)
 			const name = Helper.getTag(fm, parent);
 
 			if (a.slice(0, 1) === "!") {
@@ -583,6 +582,61 @@ export const Helper = {
 		}
 		return val.length === 36;
 	},
+
+	sortByAge(a, b) {
+		const fmA = new FrontmatterJS(a);
+		const fmB = new FrontmatterJS(b);
+
+		return fmA.createdAt.getTime() - fmB.createdAt.getTime();
+	},
+
+	sortByPriority(a, b) {
+		const fmA = new FrontmatterJS(a);
+		const fmB = new FrontmatterJS(b);
+
+		return fmB.fm.priority - fmA.fm.priority;
+	},
+
+	sortByPriorityAndAge(a, b) {
+		const fmA = new FrontmatterJS(a);
+		const fmB = new FrontmatterJS(b);
+
+		if (fmA.fm.priority !== fmB.fm.priority.priority) {
+			return Helper.sortByPriority(a, b);
+		} else {
+			return Helper.sortByAge(a, b);
+		}
+	},
+
+	sortByDuration(a, b) {
+		const fmA = new FrontmatterJS(a);
+		const fmB = new FrontmatterJS(b);
+		return Helper.durationStringToSec(fmA.fm.time_estimate) - Helper.durationStringToSec(fmB.fm.time_estimate);
+	},
+
+	sortByPriorityAndDuration(a, b) {
+		const fmA = new FrontmatterJS(a);
+		const fmB = new FrontmatterJS(b);
+
+		if (fmA.fm.priority !== fmB.fm.priority) {
+			return Helper.sortByPriority(a, b);
+		} else {
+			return Helper.sortByDuration(a, b);
+		}
+	},
+
+	sortByPriorityAndDurationAndAge(a, b) {
+		const fmA = new FrontmatterJS(a);
+		const fmB = new FrontmatterJS(b);
+
+		if (fmA.fm.priority !== fmB.fm.priority) {
+			return Helper.sortByPriority(a, b);
+		} else if (fmA.fm.time_estimate !== fmB.fm.time_estimate) {
+			return Helper.sortByDuration(a, b);
+		} else {
+			return Helper.sortByAge(a, b);
+		}
+	},
 };
 
 export const AutoField = {
@@ -1102,11 +1156,6 @@ export const Renderer = {
 			const since = Helper.msecToStringDuration(delta);
 			let name = "";
 
-			console.log("\n");
-			console.log(fm.domain);
-			console.log(fm.project);
-			console.log("\n");
-
 			if (fm.domain !== "domain/undefined") {
 				name = fm.domain;
 			} else if (fm.project !== undefined) {
@@ -1278,7 +1327,6 @@ export const Renderer = {
 		// 	.frontmatter.tasks;
 
 		for (const d of data) {
-			console.log(d);
 			const f = d.file;
 			const fm = f.frontmatter;
 			const domain =
@@ -2198,9 +2246,8 @@ export class ListMaker {
 		const rs = [];
 		const bins = {
 			nextAction: [],
-			doable: [],
-			waiting: [],
-			maybe: [],
+			waitingFor: [],
+			somedayMaybe: [],
 		};
 
 		const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
@@ -2231,51 +2278,29 @@ export class ListMaker {
 				if (fm.fm.priority > 0) {
 					bins.nextAction.push(page);
 				} else {
-					bins.maybe.push(page);
+					bins.somedayMaybe.push(page);
 				}
 			} else {
-				bins.waiting.push(page);
+				bins.somedayMaybe.push(page);
 			}
 		}
 
 		if (bins.nextAction.length > 0) {
 			rs.push(["header", 2, `Next Actions (${bins.nextAction.length})`]);
-			bins.nextAction.sort(
-				(a, b) =>
-					(a.file.frontmatter.priority -
-						b.file.frontmatter.priority) *
-					-1,
-			);
+			bins.nextAction.sort(Helper.sortByPriorityAndDurationAndAge);
 			rs.push(["array", Renderer.basicTaskJournal, bins.nextAction]);
 		}
 
-		if (bins.waiting.length > 0) {
-			rs.push(["header", 2, `Waiting (${bins.waiting.length})`]);
-			const buff = [];
-			for (const task of bins.waiting) {
-				const fm = task.file.frontmatter;
-				if (fm.needs !== undefined && fm.needs.length > 0) {
-					fm.cause = fm.needs;
-				} else if (fm.after !== undefined) {
-					fm.cause = `after: ${fm.after}`;
-				} else {
-					fm.cause = "unknown";
-				}
-				buff.push(task);
-			}
-
-			rs.push(["array", Renderer.basicTaskJournal, bins.waiting]);
+		if (bins.waitingFor.length > 0) {
+			rs.push(["header", 2, `Waiting (${bins.waitingFor.length})`]);
+			bins.waitingFor.sort(Helper.sortByPriorityAndDurationAndAge);
+			rs.push(["array", Renderer.basicTaskJournal, bins.waitingFor]);
 		}
 
-		if (bins.maybe.length > 0) {
-			rs.push(["header", 2, `Maybe (${bins.maybe.length})`]);
-			bins.maybe.sort(
-				(a, b) =>
-					(a.file.frontmatter.priority -
-						b.file.frontmatter.priority) *
-					-1,
-			);
-			rs.push(["array", Renderer.basicTaskJournal, bins.maybe]);
+		if (bins.somedayMaybe.length > 0) {
+			rs.push(["header", 2, `Maybe (${bins.somedayMaybe.length})`]);
+			bins.somedayMaybe.sort(Helper.sortByPriorityAndDurationAndAge);
+			rs.push(["array", Renderer.basicTaskJournal, bins.somedayMaybe]);
 		}
 
 		return rs;
@@ -2284,7 +2309,6 @@ export class ListMaker {
 	projectLogsSheetRelation(dv) {
 		const project = this.projectTasksSheetRelationFrontmatter(dv);
 
-		// const filterBy = this.frontmatter.parseListFilterBy(fml);
 		const filterBy = [];
 		const rs = [];
 
@@ -2568,14 +2592,14 @@ export class ListMaker {
 					deltaAcc: undefined,
 				};
 				if (fml.created_at === undefined) {
-					console.log(log);
+					console.error(log);
 					throw new Error(
 						`task: ${fm.uuid} last entry is missing 'created_at' field`,
 					);
 				}
 
 				if (fml.done_at === undefined) {
-					console.log(log);
+					console.error(log);
 					throw new Error(
 						`task: ${fm.uuid} last entry is missing 'done_at' field`,
 					);
@@ -2605,7 +2629,6 @@ export class ListMaker {
 			try {
 				d = keyGetter(entry);
 			} catch {
-				// console.log(entry);
 				throw new Error(entry);
 			}
 
@@ -2788,22 +2811,7 @@ export class ListMaker {
 			b.file.frontmatter.createdAt.getTime();
 
 		buff.sort(sortByAge);
-		const filterFunc = (page) => {
-			const fm = page.file.frontmatter;
-			return true;
-
-			if (Helper.getProject(fm, true) !== undefined) {
-				return false;
-			}
-
-			if (Helper.getDomain(fm, true) !== undefined) {
-				return false;
-			}
-
-			return true;
-		};
-
-		rs.push(["array", Renderer.inboxEntry, buff.filter(filterFunc)]);
+		rs.push(["array", Renderer.inboxEntry, buff]);
 
 		return rs;
 	}
@@ -3290,7 +3298,6 @@ export class ListMaker {
 				return false;
 			}
 
-			console.log(`return true: ${fm.uuid}`);
 			return true;
 		});
 
