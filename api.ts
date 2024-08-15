@@ -3467,13 +3467,7 @@ export class ListMaker {
 		projects.sort();
 		for (const project of projects) {
 			const tasks = bins[project];
-			tasks.sort((a, b) => {
-				const fmA = new FrontmatterJS(a);
-				const fmB = new FrontmatterJS(b);
-
-				return fmB.fm.priority - fmA.fm.priority;
-			});
-
+			tasks.sort(Helper.sortByPriorityAndDurationAndAge);
 			rs.push(["header", 2, `${project}`]);
 			rs.push(["array", Renderer.basicTaskJournal, tasks]);
 		}
@@ -3489,6 +3483,10 @@ export class ListMaker {
 					fm.getProject(),
 				)
 			) {
+				return false;
+			}
+
+			if (!this.projectIsActive(fm.getProject())) {
 				return false;
 			}
 
@@ -3523,6 +3521,10 @@ export class ListMaker {
 				return false;
 			}
 
+			if (!this.projectIsActive(fm.getProject())) {
+				return false;
+			}
+
 			// exclude tasks with fulfilled dependencies and someday maybe
 			if (this.noteHelper.isDoable(page) || fm.fm.priority === 0) {
 				return false;
@@ -3532,6 +3534,23 @@ export class ListMaker {
 		});
 
 		return this.globalTaskList(pages);
+	}
+
+	projectIsActive(name: string) : boolean {
+		const project = this.dv.pages(`"Projects"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			if (fm.getName() !== name) {
+				return false;
+			}
+
+			if (fm.fm.active === false) {
+				return false;
+			}
+
+			return true;
+		});
+
+		return project.length > 0;
 	}
 
 	somedayMaybe(dv) {
@@ -3545,10 +3564,15 @@ export class ListMaker {
 				return false;
 			}
 
+			if (!this.projectIsActive(fm.getProject())) {
+				return false;
+			}
+
 			// exclude tasks with unfulfilled dependencies
 			if (!this.noteHelper.isDoable(page) || fm.fm.priority > 0) {
 				return false;
 			}
+
 
 			return true;
 		});

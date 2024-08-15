@@ -2731,11 +2731,7 @@ var ListMaker = class {
     projects.sort();
     for (const project of projects) {
       const tasks = bins[project];
-      tasks.sort((a, b) => {
-        const fmA = new FrontmatterJS(a);
-        const fmB = new FrontmatterJS(b);
-        return fmB.fm.priority - fmA.fm.priority;
-      });
+      tasks.sort(Helper.sortByPriorityAndDurationAndAge);
       rs.push(["header", 2, `${project}`]);
       rs.push(["array", Renderer.basicTaskJournal, tasks]);
     }
@@ -2747,6 +2743,9 @@ var ListMaker = class {
       if (["daily", "weekly", "monthly", "yearly"].contains(
         fm.getProject()
       )) {
+        return false;
+      }
+      if (!this.projectIsActive(fm.getProject())) {
         return false;
       }
       if (!this.noteHelper.isDoable(page)) {
@@ -2770,6 +2769,9 @@ var ListMaker = class {
       if (!["todo", "waiting"].contains(fm.fm.status)) {
         return false;
       }
+      if (!this.projectIsActive(fm.getProject())) {
+        return false;
+      }
       if (this.noteHelper.isDoable(page) || fm.fm.priority === 0) {
         return false;
       }
@@ -2777,12 +2779,28 @@ var ListMaker = class {
     });
     return this.globalTaskList(pages);
   }
+  projectIsActive(name) {
+    const project = this.dv.pages(`"Projects"`).where((page) => {
+      const fm = new FrontmatterJS(page);
+      if (fm.getName() !== name) {
+        return false;
+      }
+      if (fm.fm.active === false) {
+        return false;
+      }
+      return true;
+    });
+    return project.length > 0;
+  }
   somedayMaybe(dv) {
     const pages = this.dv.pages(`"${Paths.Tasks}"`).where((page) => {
       const fm = new FrontmatterJS(page);
       if (["daily", "weekly", "monthly", "yearly"].contains(
         fm.getProject()
       )) {
+        return false;
+      }
+      if (!this.projectIsActive(fm.getProject())) {
         return false;
       }
       if (!this.noteHelper.isDoable(page) || fm.fm.priority > 0) {
