@@ -3093,6 +3093,7 @@ export class ListMaker {
 					);
 				}
 				continue;
+
 			} else if (tag === "monthly") {
 				if (
 					suiviMonthly[year][month] ===
@@ -3103,6 +3104,7 @@ export class ListMaker {
 					suiviMonthly[year][month].push(page);
 				}
 				continue;
+
 			} else if (tag === "yearly") {
 				if (suiviYearly[year] === undefined) {
 					suiviYearly[year] = [page];
@@ -3188,7 +3190,6 @@ export class ListMaker {
 								Renderer.makeLinkAlias(this.dv, fm.f),
 							]);
 						}
-						continue;
 					}
 
 					if (bins[year][week] === undefined) {
