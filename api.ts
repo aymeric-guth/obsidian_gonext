@@ -2281,7 +2281,7 @@ export class ListMaker {
 					bins.somedayMaybe.push(page);
 				}
 			} else {
-				bins.somedayMaybe.push(page);
+				bins.waitingFor.push(page);
 			}
 		}
 
@@ -3050,7 +3050,6 @@ export class ListMaker {
 		const suiviYearly = {};
 		const pages = this.dv
 			.pages(`"Journal"`)
-			.where((page) => true)
 			.sort((page) => page.file.frontmatter.created_at, "desc");
 
 		for (const page of pages) {
@@ -3058,17 +3057,17 @@ export class ListMaker {
 			const weekNumber = this.getWeekNumber(fm.createdAt);
 			const year = fm.createdAt.getFullYear();
 			const month = fm.createdAt.getMonth() + 1;
-			if (bins[year.toString()] === undefined) {
-				bins[year.toString()] = {};
+			if (bins[year] === undefined) {
+				bins[year] = {};
 			}
-			if (bins[year.toString()][weekNumber.toString()] === undefined) {
-				bins[year.toString()][weekNumber.toString()] = {};
+			if (bins[year][weekNumber.toString()] === undefined) {
+				bins[year][weekNumber.toString()] = {};
 			}
-			if (suiviMonthly[year.toString()] === undefined) {
-				suiviMonthly[year.toString()] = {};
+			if (suiviMonthly[year] === undefined) {
+				suiviMonthly[year] = {};
 			}
-			if (suiviWeekly[year.toString()] === undefined) {
-				suiviWeekly[year.toString()] = {};
+			if (suiviWeekly[year] === undefined) {
+				suiviWeekly[year] = {};
 			}
 
 			let tag = "";
@@ -3082,77 +3081,45 @@ export class ListMaker {
 
 			if (tag == "weekly") {
 				if (
-					suiviWeekly[year.toString()][weekNumber.toString()] ===
+					suiviWeekly[year][weekNumber] ===
 					undefined
 				) {
-					suiviWeekly[year.toString()][weekNumber.toString()] = [
+					suiviWeekly[year][weekNumber] = [
 						page,
 					];
 				} else {
-					suiviWeekly[year.toString()][weekNumber.toString()].push(
+					suiviWeekly[year][weekNumber].push(
 						page,
 					);
 				}
 				continue;
 			} else if (tag === "monthly") {
 				if (
-					suiviMonthly[year.toString()][month.toString()] ===
+					suiviMonthly[year][month] ===
 					undefined
 				) {
-					suiviMonthly[year.toString()][month.toString()] = [page];
+					suiviMonthly[year][month] = [page];
 				} else {
-					suiviMonthly[year.toString()][month.toString()].push(page);
+					suiviMonthly[year][month].push(page);
 				}
 				continue;
 			} else if (tag === "yearly") {
-				if (suiviYearly[year.toString()] === undefined) {
-					suiviYearly[year.toString()] = [page];
+				if (suiviYearly[year] === undefined) {
+					suiviYearly[year] = [page];
 				} else {
-					suiviYearly[year.toString()].push(page);
+					suiviYearly[year].push(page);
 				}
 				continue;
 			}
 
 			if (
-				bins[year.toString()][weekNumber.toString()][tag] === undefined
+				bins[year][weekNumber][tag] === undefined
 			) {
-				bins[year.toString()][weekNumber.toString()][tag] = [page];
+				bins[year][weekNumber][tag] = [page];
 			} else {
-				bins[year.toString()][weekNumber.toString()][tag].push(page);
+				bins[year][weekNumber][tag].push(page);
 			}
 		}
-
-		// const logs = this.dv
-		// 	.pages(`"${Paths.Logs}"`)
-		// 	.where((page) => true)
-		// 	.sort((page) => page.file.frontmatter.created_at, "desc");
-		//
-		// for (const log of logs) {
-		// 	const fm = new FrontmatterJS(log);
-		// 	const weekNumber = this.getWeekNumber(fm.createdAt);
-		// 	const year = fm.createdAt.getFullYear();
-		// 	if (bins[year] === undefined) {
-		// 		bins[year] = {};
-		// 	}
-		// 	if (bins[year][weekNumber.toString()] === undefined) {
-		// 		bins[year][weekNumber.toString()] = {};
-		// 	}
-		//
-		// 	let tag = "";
-		// 	if (fm.getDomain() !== undefined) {
-		// 		tag = fm.getDomain();
-		// 	} else if (fm.getProject() !== undefined) {
-		// 		tag = fm.getProject();
-		// 	} else {
-		// 		tag = "adhoc";
-		// 	}
-		//
-		// 	if (bins[year][weekNumber.toString()][tag] === undefined) {
-		// 		bins[year][weekNumber.toString()][tag] = [log];
-		// 	} else {
-		// 		bins[year][weekNumber.toString()][tag].push(log);
-		// 	}
-		// }
 
 		{
 			const years = Object.keys(bins);
@@ -3161,8 +3128,6 @@ export class ListMaker {
 			years.sort().reverse();
 
 			for (const year of years) {
-				// const weeks = Object.keys(bins[year]);
-				// weeks.sort().reverse();
 				rs.push(["header", 2, year]);
 
 				if (parseInt(year, 10) < lastYear) {
@@ -3183,7 +3148,7 @@ export class ListMaker {
 					const thisMonth = this.getMonth(year, week);
 
 					if (
-						suiviMonthly[year][thisMonth.toString()] !== undefined
+						suiviMonthly[year][thisMonth] !== undefined
 					) {
 						if (lastMonth !== thisMonth) {
 							lastMonth = thisMonth;
@@ -3203,21 +3168,20 @@ export class ListMaker {
 										Renderer.makeLinkAlias(this.dv, fm.f),
 									]);
 								}
-								// continue;
 							}
 						}
 					}
 
 					if (
-						suiviWeekly[year][week.toString()] === undefined &&
-						bins[year][week.toString()] === undefined
+						suiviWeekly[year][week] === undefined &&
+						bins[year][week] === undefined
 					) {
 						continue;
 					}
 
 					rs.push(["header", 4, `week ${week.toString()}`]);
-					if (suiviWeekly[year][week.toString()] !== undefined) {
-						for (const page of suiviWeekly[year][week.toString()]) {
+					if (suiviWeekly[year][week] !== undefined) {
+						for (const page of suiviWeekly[year][week]) {
 							const fm = new FrontmatterJS(page);
 							rs.push([
 								"paragraph",
@@ -3227,17 +3191,17 @@ export class ListMaker {
 						continue;
 					}
 
-					if (bins[year][week.toString()] === undefined) {
+					if (bins[year][week] === undefined) {
 						continue;
 					}
 
 					// domain > project
-					const tags = Object.keys(bins[year][week.toString()]);
+					const tags = Object.keys(bins[year][week]);
 					tags.sort();
 
 					for (const tag of tags) {
 						rs.push(["header", 5, tag]);
-						bins[year][week.toString()][tag].sort((a, b) => {
+						bins[year][week][tag].sort((a, b) => {
 							const fmA = new FrontmatterJS(a);
 							const fmB = new FrontmatterJS(b);
 							return (
@@ -3246,7 +3210,7 @@ export class ListMaker {
 							);
 						});
 
-						for (const page of bins[year][week.toString()][tag]) {
+						for (const page of bins[year][week][tag]) {
 							const fm = new FrontmatterJS(page);
 							if (fm.type === 6) {
 							} else {
