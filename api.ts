@@ -2250,16 +2250,37 @@ export class ListMaker {
 			somedayMaybe: [],
 		};
 
-		const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
-			const fm = new FrontmatterJS(page);
-			if (fm.fm.status === "done") {
-				return false;
-			}
+		{
+			const pages = dv.pages(`"Journal"`).where((page) => {
+				const fm = new FrontmatterJS(page);
+					return fm.getProject() === project.name;
+				}).sort((k) => k.created_at, "desc")
 
-			if (["daily", "weekly", "monthly"].contains(project.name)) {
-				return false;
-			} else if (
-				project.name === "adhoc" &&
+			if (pages.length > 0) {
+				rs.push(["header", 2, `Journal (${pages.length})`]);
+				for (const page of pages) {
+					const fm = new FrontmatterJS(page);
+					const text = Renderer.makeLink(
+						dv,
+						fm.f,
+						`${fm.createdAt.toISOString().slice(0, 10)}`,
+						"entry",
+					);
+					rs.push(["paragraph", text]);
+				}
+			}
+		}
+
+			const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
+				const fm = new FrontmatterJS(page);
+				if (fm.fm.status === "done") {
+					return false;
+				}
+
+				if (["daily", "weekly", "monthly"].contains(project.name)) {
+					return false;
+				} else if (
+					project.name === "adhoc" &&
 				fm.getProject() === undefined
 			) {
 				page.file.frontmatter.project = "adhoc";
