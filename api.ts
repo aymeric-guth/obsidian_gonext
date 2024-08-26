@@ -3342,12 +3342,12 @@ export class ListMaker {
 
 		{
 			const years = Object.keys(bins);
-			years.sort();
+			years.sort((a, b) => parseInt(a) - parseInt(b));
 
 			for (const year of years) {
 				rs.push(["header", 2, year]);
 				const months = Object.keys(bins[year]);
-				months.sort();
+				months.sort((a, b) => parseInt(a) - parseInt(b));
 				for (const month of months) {
 					rs.push([
 						"header",
@@ -3356,7 +3356,7 @@ export class ListMaker {
 					]);
 
 					const days = Object.keys(bins[year][month]);
-					days.sort();
+					days.sort((a, b) => parseInt(a) - parseInt(b));
 					for (const day of days) {
 						const weeks = [
 							"Sun",
@@ -3372,8 +3372,12 @@ export class ListMaker {
 						const at = bins[year][month][day]["at"];
 						const after = bins[year][month][day]["after"];
 
+						console.log(`year: ${year}\nmonth: ${month}\nday: ${day}`);
 						if (before.length > 0) {
 							for (const page of before) {
+								console.log("--- before ---")
+								console.log(page)
+								console.log("------")
 								const fm = new FrontmatterJS(page);
 								const text = `before: ${weeks[fm.before.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
 								rs.push([
@@ -3395,6 +3399,9 @@ export class ListMaker {
 								return fmB.at.getTime() - fmA.at.getTime();
 							});
 							for (const page of at) {
+								console.log("--- at ---")
+								console.log(page)
+								console.log("------")
 								const fm = new FrontmatterJS(page);
 								const text = `at: ${weeks[fm.at.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
 								rs.push([
@@ -3411,6 +3418,9 @@ export class ListMaker {
 
 						if (after.length > 0) {
 							for (const page of after) {
+								console.log("--- after ---")
+								console.log(page)
+								console.log("------")
 								const fm = new FrontmatterJS(page);
 								const text = ` after: ${weeks[fm.after.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
 								rs.push([
