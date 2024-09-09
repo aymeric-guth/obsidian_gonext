@@ -16,12 +16,22 @@ export const Paths = {
 };
 
 export const Status = {
-	Todo: "todo", 
+	Todo: "todo",
 	Doing: "doing",
 	Done: "done",
 	Maybe: "maybe",
 	Standby: "standby",
 	Trash: "trash",
+};
+export const GoalStatus = {
+	Reframe: "reframe",
+	Research: "research",
+	Operationalize: "operationalize",
+	Planify: "planify",
+	Dependant: "dependant",
+	Active: "active",
+	Failed: "failed",
+	Success: "success",
 };
 
 export const Types = {

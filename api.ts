@@ -1,6 +1,13 @@
 import { assert, group, time } from "console";
 import { unzip } from "zlib";
-import { Paths, Status, Types, Namespace, Default } from "./constants";
+import {
+	Paths,
+	Status,
+	Types,
+	Namespace,
+	Default,
+	GoalStatus,
+} from "./constants";
 
 class FilterBy {
 	public fm: any;
@@ -611,7 +618,10 @@ export const Helper = {
 	sortByDuration(a, b) {
 		const fmA = new FrontmatterJS(a);
 		const fmB = new FrontmatterJS(b);
-		return Helper.durationStringToSec(fmA.fm.time_estimate) - Helper.durationStringToSec(fmB.fm.time_estimate);
+		return (
+			Helper.durationStringToSec(fmA.fm.time_estimate) -
+			Helper.durationStringToSec(fmB.fm.time_estimate)
+		);
 	},
 
 	sortByPriorityAndDuration(a, b) {
@@ -953,6 +963,31 @@ export const AutoField = {
 			}
 		}
 		dv.table(["uuid", "at"], buff);
+	},
+
+	dailyGoals(dv) {
+		const current = dv.current().file.frontmatter;
+		const currentAt = new Date(current.at);
+
+		const pages = dv
+			.pages(`"${Paths.Goals}"`)
+			.where((page) => {
+				if (page.file.frontmatter.status !== "active") {
+					return false;
+				} else {
+					return true;
+				}
+			})
+			.sort((k) => k.at, "asc");
+
+		if (pages.length === 0) {
+			return;
+		}
+
+		for (const page of pages) {
+			dv.paragraph(Renderer.makeLinkShortUUID(dv, page.file));
+		}
+			
 	},
 
 	task(dv) {
@@ -2195,35 +2230,61 @@ export class ListMaker {
 	}
 
 	goals() {
-		const fm = this.frontmatter.getCurrentFrontmatter();
-		const filterBy = new FilterBy(fm);
+		// const fm = this.frontmatter.getCurrentFrontmatter();
 		const rs = [];
+		const bins = {};
+		bins[GoalStatus.Reframe] = [];
+		bins[GoalStatus.Research] = [];
+		bins[GoalStatus.Operationalize] = [];
+		bins[GoalStatus.Planify] = [];
+		bins[GoalStatus.Dependant] = [];
+		bins[GoalStatus.Active] = [];
+		bins[GoalStatus.Success] = [];
+		bins[GoalStatus.Failed] = [];
+
 		const pages = this.dv.pages(`"${Paths.Goals}"`).where((page) => {
 			const fmp = page.file.frontmatter;
-			if (fmp.status !== "todo") {
+
+			if (bins[fmp.status] === undefined) {
+				// console.error(`Invalid status for goal: "${fmp.uuid}"`);
+				return true;
+			} else {
+				const fm = new FrontmatterJS(page);
+				bins[fmp.status].push(fm);
 				return false;
 			}
-
-			return true;
 		});
 
-		const buff = [];
-		for (const page of pages) {
-			const p = new FrontmatterJS(page);
-			if (filterBy.filter(page.file.frontmatter)) {
-				continue;
-			}
-
-			buff.push(p);
+		const keys = Object.keys(bins);
+		keys.sort();
+		for (const k of keys) {
+			const buff = bins[k];
+			buff.sort((a, b) => {
+				const dta = new Date(a.fm.before);
+				const dtb = new Date(b.fm.before);
+				return dta.getTime() - dtb.getTime();
+			});
 		}
 
-		buff.sort((a, b) => {
-			const dta = new Date(a.fm.before);
-			const dtb = new Date(b.fm.before);
-			return dta.getTime() - dtb.getTime();
-		});
-		rs.push(["header", 1, "Goals"]);
-		rs.push(["array", Renderer.goal, buff]);
+		const displayGoals = (k, rs) => {
+			rs.push(["header", 3, k]);
+			const buff = bins[k];
+			rs.push(["array", Renderer.goal, buff]);
+		}
+
+		rs.push(["header", 2, "operational"]);
+		displayGoals("active", rs);
+		displayGoals("planify", rs);
+
+		rs.push(["header", 2, "non-operational"]);
+		displayGoals("reframe", rs);
+		displayGoals("research", rs);
+		displayGoals("operationalize", rs);
+		// displayGoals("dependant", rs);
+
+		rs.push(["header", 2, "done"]);
+		displayGoals("success", rs);
+		displayGoals("failed", rs);
 
 		return rs;
 	}
@@ -2236,7 +2297,9 @@ export class ListMaker {
 			name: fm.getName(),
 			uuid: fm.uuid,
 			active:
-				fm.fm.active === undefined || fm.fm.active === true ? true : false,
+				fm.fm.active === undefined || fm.fm.active === true
+					? true
+					: false,
 		};
 	}
 
@@ -2251,10 +2314,13 @@ export class ListMaker {
 		};
 
 		{
-			const pages = dv.pages(`"Journal"`).where((page) => {
-				const fm = new FrontmatterJS(page);
+			const pages = dv
+				.pages(`"Journal"`)
+				.where((page) => {
+					const fm = new FrontmatterJS(page);
 					return fm.getProject() === project.name;
-				}).sort((k) => k.created_at, "desc")
+				})
+				.sort((k) => k.created_at, "desc");
 
 			if (pages.length > 0) {
 				rs.push(["header", 2, `Journal (${pages.length})`]);
@@ -2271,16 +2337,16 @@ export class ListMaker {
 			}
 		}
 
-			const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
-				const fm = new FrontmatterJS(page);
-				if (fm.fm.status === "done") {
-					return false;
-				}
+		const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			if (fm.fm.status === "done") {
+				return false;
+			}
 
-				if (["daily", "weekly", "monthly"].contains(project.name)) {
-					return false;
-				} else if (
-					project.name === "adhoc" &&
+			if (["daily", "weekly", "monthly"].contains(project.name)) {
+				return false;
+			} else if (
+				project.name === "adhoc" &&
 				fm.getProject() === undefined
 			) {
 				page.file.frontmatter.project = "adhoc";
@@ -3101,31 +3167,19 @@ export class ListMaker {
 			}
 
 			if (tag == "weekly") {
-				if (
-					suiviWeekly[year][weekNumber] ===
-					undefined
-				) {
-					suiviWeekly[year][weekNumber] = [
-						page,
-					];
+				if (suiviWeekly[year][weekNumber] === undefined) {
+					suiviWeekly[year][weekNumber] = [page];
 				} else {
-					suiviWeekly[year][weekNumber].push(
-						page,
-					);
+					suiviWeekly[year][weekNumber].push(page);
 				}
 				continue;
-
 			} else if (tag === "monthly") {
-				if (
-					suiviMonthly[year][month] ===
-					undefined
-				) {
+				if (suiviMonthly[year][month] === undefined) {
 					suiviMonthly[year][month] = [page];
 				} else {
 					suiviMonthly[year][month].push(page);
 				}
 				continue;
-
 			} else if (tag === "yearly") {
 				if (suiviYearly[year] === undefined) {
 					suiviYearly[year] = [page];
@@ -3135,9 +3189,7 @@ export class ListMaker {
 				continue;
 			}
 
-			if (
-				bins[year][weekNumber][tag] === undefined
-			) {
+			if (bins[year][weekNumber][tag] === undefined) {
 				bins[year][weekNumber][tag] = [page];
 			} else {
 				bins[year][weekNumber][tag].push(page);
@@ -3170,9 +3222,7 @@ export class ListMaker {
 				for (let week = 52; week > 0; week--) {
 					const thisMonth = this.getMonth(year, week);
 
-					if (
-						suiviMonthly[year][thisMonth] !== undefined
-					) {
+					if (suiviMonthly[year][thisMonth] !== undefined) {
 						if (lastMonth !== thisMonth) {
 							lastMonth = thisMonth;
 							rs.push([
@@ -3372,12 +3422,14 @@ export class ListMaker {
 						const at = bins[year][month][day]["at"];
 						const after = bins[year][month][day]["after"];
 
-						console.log(`year: ${year}\nmonth: ${month}\nday: ${day}`);
+						console.log(
+							`year: ${year}\nmonth: ${month}\nday: ${day}`,
+						);
 						if (before.length > 0) {
 							for (const page of before) {
-								console.log("--- before ---")
-								console.log(page)
-								console.log("------")
+								console.log("--- before ---");
+								console.log(page);
+								console.log("------");
 								const fm = new FrontmatterJS(page);
 								const text = `before: ${weeks[fm.before.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
 								rs.push([
@@ -3399,9 +3451,9 @@ export class ListMaker {
 								return fmB.at.getTime() - fmA.at.getTime();
 							});
 							for (const page of at) {
-								console.log("--- at ---")
-								console.log(page)
-								console.log("------")
+								console.log("--- at ---");
+								console.log(page);
+								console.log("------");
 								const fm = new FrontmatterJS(page);
 								const text = `at: ${weeks[fm.at.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
 								rs.push([
@@ -3418,9 +3470,9 @@ export class ListMaker {
 
 						if (after.length > 0) {
 							for (const page of after) {
-								console.log("--- after ---")
-								console.log(page)
-								console.log("------")
+								console.log("--- after ---");
+								console.log(page);
+								console.log("------");
 								const fm = new FrontmatterJS(page);
 								const text = ` after: ${weeks[fm.after.getDay()]} ${day} ${fm.at.toISOString().slice(11, 16)} | ${fm.getProject()}`;
 								rs.push([
@@ -3532,7 +3584,7 @@ export class ListMaker {
 		return this.globalTaskList(pages);
 	}
 
-	projectIsActive(name: string) : boolean {
+	projectIsActive(name: string): boolean {
 		const project = this.dv.pages(`"Projects"`).where((page) => {
 			const fm = new FrontmatterJS(page);
 			if (fm.getName() !== name) {
@@ -3568,7 +3620,6 @@ export class ListMaker {
 			if (!this.noteHelper.isDoable(page) || fm.fm.priority > 0) {
 				return false;
 			}
-
 
 			return true;
 		});
