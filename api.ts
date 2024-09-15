@@ -886,6 +886,9 @@ export const AutoField = {
 		const currentAt = new Date(current.at);
 		const currentAtShort = currentAt.toISOString().slice(0, 10);
 
+		const gonext = app.plugins.plugins.obsidian_gonext;
+		const noteHelper = new NoteHelper(gonext, dv, new Frontmatter(gonext));
+
 		const pages = dv
 			.pages(`"${Paths.Tasks}"`)
 			.where((page) => {
@@ -899,6 +902,10 @@ export const AutoField = {
 				}
 
 				if (fm.fm.status !== "todo" || fm.getProject() === "daily") {
+					return false;
+				}
+
+				if (!noteHelper.isDoable(page)) {
 					return false;
 				}
 
