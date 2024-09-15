@@ -886,6 +886,7 @@ export const AutoField = {
 		const currentAt = new Date(current.at);
 		const currentAtShort = currentAt.toISOString().slice(0, 10);
 
+		// @ts-ignore
 		const gonext = app.plugins.plugins.obsidian_gonext;
 		const noteHelper = new NoteHelper(gonext, dv, new Frontmatter(gonext));
 
