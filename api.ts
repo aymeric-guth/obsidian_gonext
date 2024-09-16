@@ -906,17 +906,28 @@ export const AutoField = {
 					return false;
 				}
 
-				if (!noteHelper.isDoable(page)) {
-					return false;
-				}
-
-				const now = new Date();
+				// const now = new Date();
+				const now = currentAt;
 				let fmAtShort = undefined;
 				try {
 					fmAtShort = fm.at.toISOString().slice(0, 10);
 				} catch {
 					throw new Error(`${fm.uuid}`);
 				}
+
+				if (!noteHelper.isDoable(page, currentAt)) {
+					return false;
+				}
+
+				// if (fm.uuid === "2a97de35-ca87-4267-9159-6c096d4163f1") {
+				// 	console.log(`uuid: ${fm.uuid}`);
+				// 	console.log(`now: ${now}`);
+				// 	console.log(`fm.at: ${fm.at}`);
+				// 	console.log(`fmAtShort: ${fmAtShort}`);
+				// 	console.log(`currentAtShort: ${currentAtShort}`);
+				// 	console.log(`condition: ${fm.at !== undefined && fmAtShort === currentAtShort}`);
+				// }
+
 				if (
 					page.file.frontmatter.at !== undefined &&
 					fmAtShort === currentAtShort
@@ -995,7 +1006,6 @@ export const AutoField = {
 		for (const page of pages) {
 			dv.paragraph(Renderer.makeLinkShortUUID(dv, page.file));
 		}
-			
 	},
 
 	task(dv) {
@@ -1918,7 +1928,7 @@ export class NoteHelper {
 		this.frontmatter = frontmatter;
 	}
 
-	isDoable(task) {
+	isDoable(task, at = undefined) {
 		const fm = task.file.frontmatter;
 		if (fm.status !== Status.Todo) {
 			return false;
@@ -1931,10 +1941,28 @@ export class NoteHelper {
 			}
 		}
 
-		if (fm.at !== undefined) {
-			const at = new Date(fm.at);
-			if (Date.now() <= at.getTime()) {
+		if (at !== undefined) {
+			const fmAt = new Date(fm.at);
+			fmAt.setHours(0);
+			fmAt.setMinutes(0);
+			fmAt.setSeconds(0);
+
+			// if (fm.uuid === "2a97de35-ca87-4267-9159-6c096d4163f1") {
+			// 	console.log(`uuid: ${fm.uuid}`);
+			// 	console.log(`at: ${at.getTime()}`);
+			// 	console.log(`fmAt: ${fmAt.getTime()}`);
+			// 	console.log(`if: ${at.getTime() < fmAt.getTime()}`);
+			// }
+
+			if (at.getTime() < fmAt.getTime()) {
 				return false;
+			}
+		} else {
+			if (fm.at !== undefined) {
+				const at = new Date(fm.at);
+				if (Date.now() <= at.getTime()) {
+					return false;
+				}
 			}
 		}
 
@@ -2278,7 +2306,7 @@ export class ListMaker {
 			rs.push(["header", 3, k]);
 			const buff = bins[k];
 			rs.push(["array", Renderer.goal, buff]);
-		}
+		};
 
 		rs.push(["header", 2, "operational"]);
 		displayGoals("active", rs);
