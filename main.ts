@@ -192,45 +192,43 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
-		this.addCommand({
-			id: "gonext-generate-fleeting",
-			name: "Generate fleeting note",
-			//
-			// @ts-ignore
-
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				const dt = new Date();
-				var note = {
-					uuid: randomUUID(),
-					type: 13,
-					version: "0.0.4",
-					created_at: dt.toISOString(),
-					path: "",
-					data: "",
-				}
-				
-				note.path = `800 Inbox/${note.uuid}.md`;
-				note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
-
-				const f = app.vault.create(note.path, note.data).then((f) => {
-					return f;
-				});
-
-				// const newLeaf = this.app.workspace.splitActiveLeaf();
-				// app.workspace.openLinkText(note.path, "/", true, newLeaf).then(() => {});
-				// revealLeaf(leaf: WorkspaceLeaf): Promise<void>;
-				const active = app.workspace.activeLeaf;
-				// @ts-ignore
-				const root = active.parent;
-				app.workspace.createLeafInParent(root, root.children.length+1);
-				const leaf = root.children[root.children.length-1];
-				// createLeafInParent(parent: WorkspaceSplit, index: number): WorkspaceLeaf;
-				// setActiveLeaf(leaf: WorkspaceLeaf, params?: {focus?: boolean;}): void;
-				f.then((file) => {leaf.openFile(file, {active: true})});
-				// WorkspaceLeaf.openFile()
-				// openFile(file: TFile, openState?: OpenViewState): Promise<void>;
-			},
-		});
+		// this.addCommand({
+		// 	id: "gonext-generate-fleeting",
+		// 	name: "Generate fleeting note",
+		// 	// @ts-ignore
+		// 	editorCallback: (editor: Editor, view: MarkdownView) => {
+		// 		const dt = new Date();
+		// 		var note = {
+		// 			uuid: randomUUID(),
+		// 			type: 13,
+		// 			version: "0.0.4",
+		// 			created_at: dt.toISOString(),
+		// 			path: "",
+		// 			data: "",
+		// 		}
+		// 		
+		// 		note.path = `800 Inbox/${note.uuid}.md`;
+		// 		note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
+		//
+		// 		const f = app.vault.create(note.path, note.data).then((f) => {
+		// 			return f;
+		// 		});
+		//
+		// 		// const newLeaf = this.app.workspace.splitActiveLeaf();
+		// 		// app.workspace.openLinkText(note.path, "/", true, newLeaf).then(() => {});
+		// 		// revealLeaf(leaf: WorkspaceLeaf): Promise<void>;
+		// 		const active = app.workspace.activeLeaf;
+		// 		// @ts-ignore
+		// 		const root = active.parent;
+		// 		app.workspace.createLeafInParent(root, root.children.length+1);
+		// 		const leaf = root.children[root.children.length-1];
+		// 		// createLeafInParent(parent: WorkspaceSplit, index: number): WorkspaceLeaf;
+		// 		// setActiveLeaf(leaf: WorkspaceLeaf, params?: {focus?: boolean;}): void;
+		// 		f.then((file) => {leaf.openFile(file, {active: true})});
+		// 		// WorkspaceLeaf.openFile()
+		// 		// openFile(file: TFile, openState?: OpenViewState): Promise<void>;
+		// 	},
+		// });
 
 		this.addCommand({
 			id: "safe-delete",
