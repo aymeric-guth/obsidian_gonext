@@ -3103,7 +3103,7 @@ export class ListMaker {
 					this.dv,
 					task.f,
 					`${task.at.toISOString().slice(0, 10)}, ${day}`,
-					"daily",
+					"Task",
 				);
 
 				if (weekNumber < currentWeekNumber) {

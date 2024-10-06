@@ -132,37 +132,60 @@ export default class MyPlugin extends Plugin {
 			// this.taskInStatusBar.setText(`${activeTasks.length} active`);
 
 			// @ts-ignore
-			const leaf = app.workspace.activeLeaf;
-			// @ts-ignore
-			const tabTitleOrig = leaf.tabHeaderInnerTitleEl.innerText;
-			// @ts-ignore
-			if (tabTitleOrig.length !== 36) {
-				// console.warn("'tabTitleOrig.length' !== 36");
-				return;
+			const root = app.workspace.activeLeaf.parent;
+			for (const leaf of root.children) {
+				// @ts-ignore
+				const tabTitleOrig = leaf.tabHeaderInnerTitleEl.innerText;
+				// @ts-ignore
+				if (tabTitleOrig.length !== 36) {
+					// console.warn("'tabTitleOrig.length' !== 36");
+					continue;
+				}
+
+				let path = undefined;
+				try {
+					path = leaf.view.getSyncViewState().state.file;
+				} catch {
+					continue;
+				}
+				const file = app.vault.getAbstractFileByPath(path);
+				// @ts-ignore
+				const fm = app.metadataCache.getFileCache(file).frontmatter;
+
+				if (fm === undefined) {
+					continue;
+				}
+
+				let text = "";
+				if (
+					fm.type === 3 &&
+					Helper.getProject(fm) !== undefined &&
+					Helper.getProject(fm) === "project/daily"
+				) {
+					const at = new Date(fm.at);
+					const day = [
+						"Sun",
+						"Mon",
+						"Tue",
+						"Wed",
+						"Thu",
+						"Fri",
+						"Sat",
+					][at.getDay()];
+					text = `${day}. ${at.toISOString().slice(0, 10)}`;
+				} else {
+					// @ts-ignore
+					text = fm.alias;
+					// @ts-ignore
+					if (Helper.nilCheck(text) || text === "") {
+						return;
+					}
+				}
+				// @ts-ignore
+				leaf.tabHeaderInnerTitleEl.innerText = text;
+				// @ts-ignore
+				leaf.tabHeaderInnerTitleEl.innerHTML = text;
 			}
-
-			// @ts-ignore
-			const fm = this.frontmatter.getCurrentFrontmatter();
-			// @ts-ignore
-			if (fm === undefined) {
-				return undefined;
-			}
-
-			// @ts-ignore
-			const alias = fm.alias;
-			// @ts-ignore
-			if (Helper.nilCheck(alias) || alias === "") {
-				return;
-			}
-
-			// @ts-ignore
-			leaf.tabHeaderInnerTitleEl.innerText = alias;
-			// @ts-ignore
-			leaf.tabHeaderInnerTitleEl.innerHTML = alias;
-
-			// app.workspace.activeLeaf.containerEl.children -> html, good luck pour retrouver la bonne div
-			// this.statusBarEl.setText("coucou");
-			// this.addStatusBarItem().createEl("span", { text: "Hello from the status bar 👋" });
 		});
 
 		// This adds an editor command that can perform some operation on the current editor instance
@@ -198,15 +221,15 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const dt = new Date();
-				var note = {
+				const note = {
 					uuid: randomUUID(),
 					type: 13,
 					version: "0.0.4",
 					created_at: dt.toISOString(),
 					path: "",
 					data: "",
-				}
-				
+				};
+
 				note.path = `800 Inbox/${note.uuid}.md`;
 				note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
 
@@ -220,11 +243,16 @@ export default class MyPlugin extends Plugin {
 				const active = app.workspace.activeLeaf;
 				// @ts-ignore
 				const root = active.parent;
-				app.workspace.createLeafInParent(root, root.children.length+1);
-				const leaf = root.children[root.children.length-1];
+				app.workspace.createLeafInParent(
+					root,
+					root.children.length + 1,
+				);
+				const leaf = root.children[root.children.length - 1];
 				// createLeafInParent(parent: WorkspaceSplit, index: number): WorkspaceLeaf;
 				// setActiveLeaf(leaf: WorkspaceLeaf, params?: {focus?: boolean;}): void;
-				f.then((file) => {leaf.openFile(file, {active: true})});
+				f.then((file) => {
+					leaf.openFile(file, { active: true });
+				});
 				// WorkspaceLeaf.openFile()
 				// openFile(file: TFile, openState?: OpenViewState): Promise<void>;
 			},
