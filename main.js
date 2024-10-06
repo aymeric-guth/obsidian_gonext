@@ -2255,7 +2255,7 @@ var ListMaker = class {
     }
     return rs;
   }
-  inbox() {
+  inbox(dv) {
     const rs = [];
     const buff = [];
     const filterBy = [];
@@ -2267,7 +2267,14 @@ var ListMaker = class {
       e.file.frontmatter.createdAt = this.frontmatter.getCreatedAt(
         e.file
       );
-      const fmjs = new FrontmatterJS(e);
+      let fmjs = null;
+      try {
+        fmjs = new FrontmatterJS(e);
+      } catch (ValidationError2) {
+        console.log(e);
+        dv.paragraph(Renderer.makeLink(dv, e.file));
+        break;
+      }
       fm.project = Helper.getProject(fm, true);
       fm.domain = `domain/${fmjs.getDomain()}`;
       fm.components = Helper.getComponents(fm);
@@ -3719,6 +3726,7 @@ var DvLib = class {
 };
 
 // main.ts
+var { randomUUID } = require("crypto");
 var DEFAULT_SETTINGS = {
   mySetting: "default"
 };
@@ -3814,16 +3822,38 @@ var MyPlugin = class extends import_obsidian.Plugin {
     });
     this.addCommand({
       id: "gonext-generate-fleeting",
-      name: "Copy current file UUID",
+      name: "Generate fleeting note",
+      //
       // @ts-ignore
       editorCallback: (editor, view) => {
-        const fm = this.gonext.getCurrentFrontmatter();
-        if (fm === void 0) {
-          return;
-        }
-        if (fm.uuid == void 0) {
-          return;
-        }
+        const dt = new Date();
+        var note = {
+          uuid: randomUUID(),
+          type: 13,
+          version: "0.0.4",
+          created_at: dt.toISOString(),
+          path: "",
+          data: ""
+        };
+        note.path = `800 Inbox/${note.uuid}.md`;
+        note.data = `---
+type: 13
+uuid: "${note.uuid}"
+created_at: "${note.created_at}"
+version: "0.0.4"
+---
+## Content
+`;
+        const f = app.vault.create(note.path, note.data).then((f2) => {
+          return f2;
+        });
+        const active = app.workspace.activeLeaf;
+        const root = active.parent;
+        app.workspace.createLeafInParent(root, root.children.length + 1);
+        const leaf = root.children[root.children.length - 1];
+        f.then((file) => {
+          leaf.openFile(file, { active: true });
+        });
       }
     });
     this.addCommand({

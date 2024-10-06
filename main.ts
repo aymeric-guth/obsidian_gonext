@@ -23,6 +23,7 @@ import {
 } from "./api";
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
+const { randomUUID } = require("crypto");
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -37,7 +38,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 // contient une ref au frontmatter qui est preprocess,
 // ie champs fm.project, fm.area, ... sont populés
 class Current {
-	constructor() {}
+	constructor() { }
 }
 
 export default class MyPlugin extends Plugin {
@@ -193,27 +194,41 @@ export default class MyPlugin extends Plugin {
 
 		this.addCommand({
 			id: "gonext-generate-fleeting",
-			name: "Copy current file UUID",
+			name: "Generate fleeting note",
+			//
 			// @ts-ignore
+
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				// @ts-ignore
-				const fm = this.gonext.getCurrentFrontmatter();
-				// @ts-ignore
-				if (fm === undefined) {
-					// console.warn(
-					// 	"Current file does not have a valid `frontmatter`",
-					// );
-					return;
+				const dt = new Date();
+				var note = {
+					uuid: randomUUID(),
+					type: 13,
+					version: "0.0.4",
+					created_at: dt.toISOString(),
+					path: "",
+					data: "",
 				}
+				
+				note.path = `800 Inbox/${note.uuid}.md`;
+				note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
 
-				if (fm.uuid == undefined) {
-					// console.warn("Current file does not have a valid `UUID`");
-					return;
-				}
+				const f = app.vault.create(note.path, note.data).then((f) => {
+					return f;
+				});
 
-				// console.log("editor callback function");
-				// console.log(editor.getSelection());
-				// editor.replaceSelection('Sample Editor Command');
+				// const newLeaf = this.app.workspace.splitActiveLeaf();
+				// app.workspace.openLinkText(note.path, "/", true, newLeaf).then(() => {});
+				// revealLeaf(leaf: WorkspaceLeaf): Promise<void>;
+				const active = app.workspace.activeLeaf;
+				// @ts-ignore
+				const root = active.parent;
+				app.workspace.createLeafInParent(root, root.children.length+1);
+				const leaf = root.children[root.children.length-1];
+				// createLeafInParent(parent: WorkspaceSplit, index: number): WorkspaceLeaf;
+				// setActiveLeaf(leaf: WorkspaceLeaf, params?: {focus?: boolean;}): void;
+				f.then((file) => {leaf.openFile(file, {active: true})});
+				// WorkspaceLeaf.openFile()
+				// openFile(file: TFile, openState?: OpenViewState): Promise<void>;
 			},
 		});
 
@@ -343,8 +358,7 @@ export class ExampleModal extends Modal {
 		const tasks = dv.pages().array().slice(0, 10);
 		let s = "";
 		for (const task of tasks) {
-			s += `${task.file.path}\n\n`
-
+			s += `${task.file.path}\n\n`;
 		}
 		contentEl.setText(s);
 	}

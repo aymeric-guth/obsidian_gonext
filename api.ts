@@ -2865,7 +2865,7 @@ export class ListMaker {
 		return rs;
 	}
 
-	inbox() {
+	inbox(dv) {
 		const rs = [];
 		const buff = [];
 		// fonction d'extraction et d'initialisation des paramrtres du frontmatter
@@ -2881,7 +2881,15 @@ export class ListMaker {
 			e.file.frontmatter.createdAt = this.frontmatter.getCreatedAt(
 				e.file,
 			);
-			const fmjs = new FrontmatterJS(e);
+			let fmjs = null;
+			try {
+				fmjs = new FrontmatterJS(e);
+			} catch (ValidationError) {
+				console.log(e);
+				dv.paragraph(Renderer.makeLink(dv, e.file));
+				break;
+			}
+
 			fm.project = Helper.getProject(fm, true);
 			fm.domain = `domain/${fmjs.getDomain()}`;
 			fm.components = Helper.getComponents(fm);
@@ -2896,31 +2904,6 @@ export class ListMaker {
 			buff.push(e);
 		}
 
-		// const logs = this.dv.pages(`"${Paths.Logs}"`).where((p) => {
-		// 	if (p.type !== Types.Log) {
-		// 		return false;
-		// 	}
-		//
-		// 	const f = p.file;
-		// 	const createdAt = this.frontmatter.getCreatedAt(f);
-		// 	const now = new Date();
-		// 	if (createdAt.getTime() + 86400000 - now.getTime() > 0) {
-		// 		return false;
-		// 	}
-		//
-		// 	if (p.reviewed !== undefined && p.reviewed >= 1) {
-		// 		return false;
-		// 	}
-		//
-		// 	const pages = this.dv
-		// 		.pages(`"${Paths.Tasks}/${f.frontmatter.parent_id}"`)
-		// 		.array();
-		// 	if (pages.length !== 1) {
-		// 		return false;
-		// 	}
-		//
-		// 	return true;
-		// });
 		const logs = [];
 
 		for (const e of logs) {
