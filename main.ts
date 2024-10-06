@@ -190,6 +190,33 @@ export default class MyPlugin extends Plugin {
 				// editor.replaceSelection('Sample Editor Command');
 			},
 		});
+
+		this.addCommand({
+			id: "gonext-generate-fleeting",
+			name: "Copy current file UUID",
+			// @ts-ignore
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				// @ts-ignore
+				const fm = this.gonext.getCurrentFrontmatter();
+				// @ts-ignore
+				if (fm === undefined) {
+					// console.warn(
+					// 	"Current file does not have a valid `frontmatter`",
+					// );
+					return;
+				}
+
+				if (fm.uuid == undefined) {
+					// console.warn("Current file does not have a valid `UUID`");
+					return;
+				}
+
+				// console.log("editor callback function");
+				// console.log(editor.getSelection());
+				// editor.replaceSelection('Sample Editor Command');
+			},
+		});
+
 		this.addCommand({
 			id: "safe-delete",
 			name: "Safe Delete",

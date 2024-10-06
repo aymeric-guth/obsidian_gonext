@@ -588,6 +588,35 @@ var AutoField = {
     }
     dv.paragraph(s);
   },
+  healmon(dv) {
+    const fm = new FrontmatterJS(dv.current());
+    const current = fm.createdAt.toISOString().slice(0, 10);
+    const pages = dv.pages(`"${Paths.Journal}"`).where((page) => {
+      const jFm = new FrontmatterJS(page);
+      if (jFm.getProject() !== "homecook") {
+        return false;
+      }
+      let jCurrent = null;
+      try {
+        jCurrent = jFm.createdAt.toISOString().slice(0, 10);
+      } catch (e) {
+        dv.paragraph(
+          `Invalid date: ${Renderer.makeLinkShortUUID(dv, page.file)}`
+        );
+        console.error(jFm);
+      }
+      if (current !== jCurrent) {
+        return false;
+      }
+      return true;
+    });
+    if (pages.length) {
+      dv.header(4, "repas");
+      for (const page of pages) {
+        dv.paragraph(Renderer.makeLinkShortUUID(dv, page.file));
+      }
+    }
+  },
   authors(dv, fm) {
     const authors = fm.authors;
     if (authors === void 0 || authors.length === 0) {
@@ -2431,6 +2460,19 @@ var ListMaker = class {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil(((d - yearStart) / 864e5 + 1) / 7);
   }
+  getWeekNumber4(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const firstSunday = yearStart.getUTCDay() === 0 ? yearStart : new Date(
+      Date.UTC(
+        d.getUTCFullYear(),
+        0,
+        1 + (7 - yearStart.getUTCDay())
+      )
+    );
+    const daysSinceFirstSunday = (d - firstSunday + 864e5) / 864e5;
+    return Math.ceil(daysSinceFirstSunday / 7);
+  }
   getMonth(year, weekNumber) {
     const firstDayOfYear = new Date(year, 0, 1);
     const firstDayOfWeek = firstDayOfYear.getDay();
@@ -2457,9 +2499,24 @@ var ListMaker = class {
     const pages = this.dv.pages(`"Journal"`).sort((page) => page.file.frontmatter.created_at, "desc");
     for (const page of pages) {
       const fm = new FrontmatterJS(page);
-      const weekNumber = this.getWeekNumber(fm.createdAt);
+      const weekNumber = this.getWeekNumber4(fm.createdAt);
       const year = fm.createdAt.getFullYear();
       const month = fm.createdAt.getMonth() + 1;
+      let msg = "";
+      msg += `createdAt: ${fm.createdAt.toISOString().slice(0, 10)}
+`;
+      msg += `weekNumber: ${weekNumber}
+`;
+      msg += `year: ${year}
+`;
+      msg += `month: ${month}
+`;
+      msg += `day: ${fm.createdAt.getDay()}
+`;
+      const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][fm.createdAt.getDay()];
+      msg += `day: ${day}
+`;
+      console.log(msg);
       if (bins[year] === void 0) {
         bins[year] = {};
       }
@@ -3743,6 +3800,20 @@ var MyPlugin = class extends import_obsidian.Plugin {
     });
     this.addCommand({
       id: "gonext-utils-copy-current-file-uuid",
+      name: "Copy current file UUID",
+      // @ts-ignore
+      editorCallback: (editor, view) => {
+        const fm = this.gonext.getCurrentFrontmatter();
+        if (fm === void 0) {
+          return;
+        }
+        if (fm.uuid == void 0) {
+          return;
+        }
+      }
+    });
+    this.addCommand({
+      id: "gonext-generate-fleeting",
       name: "Copy current file UUID",
       // @ts-ignore
       editorCallback: (editor, view) => {

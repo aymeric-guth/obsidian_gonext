@@ -665,6 +665,41 @@ export const AutoField = {
 		dv.paragraph(s);
 	},
 
+	healmon(dv) {
+		const fm = new FrontmatterJS(dv.current());
+		const current = fm.createdAt.toISOString().slice(0, 10);
+
+		const pages = dv.pages(`"${Paths.Journal}"`).where((page) => {
+			const jFm = new FrontmatterJS(page);
+			if (jFm.getProject() !== "homecook") {
+				return false;
+			}
+
+			let jCurrent = null;
+			try {
+				jCurrent = jFm.createdAt.toISOString().slice(0, 10);
+			} catch {
+				dv.paragraph(
+					`Invalid date: ${Renderer.makeLinkShortUUID(dv, page.file)}`,
+				);
+				console.error(jFm);
+			}
+
+			if (current !== jCurrent) {
+				return false;
+			}
+
+			return true;
+		});
+
+		if (pages.length) {
+			dv.header(4, "repas");
+			for (const page of pages) {
+				dv.paragraph(Renderer.makeLinkShortUUID(dv, page.file));
+			}
+		}
+	},
+
 	authors(dv, fm) {
 		const authors = fm.authors;
 		if (authors === undefined || authors.length === 0) {
@@ -3127,6 +3162,29 @@ export class ListMaker {
 		// Calculate full weeks to nearest Thursday
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 	}
+
+	getWeekNumber4(d) {
+		// @ts-ignore
+		d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+		// @ts-ignore
+		const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+		// @ts-ignore
+		const firstSunday =
+			yearStart.getUTCDay() === 0
+				? yearStart
+				: new Date(
+					Date.UTC(
+						d.getUTCFullYear(),
+						0,
+						1 + (7 - yearStart.getUTCDay()),
+					),
+				);
+		// @ts-ignore
+		const daysSinceFirstSunday = (d - firstSunday + 86400000) / 86400000;
+		// @ts-ignore
+		return Math.ceil(daysSinceFirstSunday / 7);
+	}
+
 	getMonth(year, weekNumber) {
 		// Create a date object for the first day of the year
 		const firstDayOfYear = new Date(year, 0, 1);
@@ -3177,9 +3235,24 @@ export class ListMaker {
 
 		for (const page of pages) {
 			const fm = new FrontmatterJS(page);
-			const weekNumber = this.getWeekNumber(fm.createdAt);
+			// const weekNumber = this.getWeekNumber(fm.createdAt);
+			const weekNumber = this.getWeekNumber4(fm.createdAt);
 			const year = fm.createdAt.getFullYear();
 			const month = fm.createdAt.getMonth() + 1;
+
+			let msg = "";
+			msg += `createdAt: ${fm.createdAt.toISOString().slice(0, 10)}\n`;
+			msg += `weekNumber: ${weekNumber}\n`;
+			msg += `year: ${year}\n`;
+			msg += `month: ${month}\n`;
+			msg += `day: ${fm.createdAt.getDay()}\n`;
+			const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+				fm.createdAt.getDay()
+			];
+			msg += `day: ${day}\n`;
+
+			console.log(msg);
+
 			if (bins[year] === undefined) {
 				bins[year] = {};
 			}
