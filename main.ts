@@ -23,7 +23,7 @@ import {
 } from "./api";
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
-const { randomUUID } = require("crypto");
+// const { randomUUID } = require("crypto");
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -215,6 +215,7 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
+		const randomUUID = () => "beea9742-c689-43c0-ba5f-fa8023a1550b";
 		this.addCommand({
 			id: "gonext-generate-fleeting",
 			name: "Generate fleeting note",
