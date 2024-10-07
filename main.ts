@@ -23,7 +23,9 @@ import {
 } from "./api";
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
+// import { randomUUID } from "crypto";
 // const { randomUUID } = require("crypto");
+import { v4 as uuidv4 } from 'uuid';
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -215,7 +217,7 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
-		const randomUUID = () => "beea9742-c689-43c0-ba5f-fa8023a1550b";
+		// const randomUUID = () => "beea9742-c689-43c0-ba5f-fa8023a1550b";
 		this.addCommand({
 			id: "gonext-generate-fleeting",
 			name: "Generate fleeting note",
@@ -223,7 +225,7 @@ export default class MyPlugin extends Plugin {
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				const dt = new Date();
 				const note = {
-					uuid: randomUUID(),
+					uuid: uuidv4(),
 					type: 13,
 					version: "0.0.4",
 					created_at: dt.toISOString(),
