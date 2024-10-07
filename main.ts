@@ -195,7 +195,7 @@ export default class MyPlugin extends Plugin {
 			id: "gonext-utils-copy-current-file-uuid",
 			name: "Copy current file UUID",
 			// @ts-ignore
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			callback: () => {
 				// @ts-ignore
 				const fm = this.gonext.getCurrentFrontmatter();
 				// @ts-ignore
@@ -217,12 +217,11 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
-		// const randomUUID = () => "beea9742-c689-43c0-ba5f-fa8023a1550b";
 		this.addCommand({
 			id: "gonext-generate-fleeting",
 			name: "Generate fleeting note",
 			// @ts-ignore
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			callback: () => {
 				const dt = new Date();
 				const note = {
 					uuid: uuidv4(),
@@ -236,28 +235,20 @@ export default class MyPlugin extends Plugin {
 				note.path = `800 Inbox/${note.uuid}.md`;
 				note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
 
-				const f = app.vault.create(note.path, note.data).then((f) => {
+				const f = this.app.vault.create(note.path, note.data).then((f) => {
 					return f;
 				});
-
-				// const newLeaf = this.app.workspace.splitActiveLeaf();
-				// app.workspace.openLinkText(note.path, "/", true, newLeaf).then(() => {});
-				// revealLeaf(leaf: WorkspaceLeaf): Promise<void>;
-				const active = app.workspace.activeLeaf;
+				const active = this.app.workspace.activeLeaf;
 				// @ts-ignore
 				const root = active.parent;
-				app.workspace.createLeafInParent(
+				this.app.workspace.createLeafInParent(
 					root,
 					root.children.length + 1,
 				);
 				const leaf = root.children[root.children.length - 1];
-				// createLeafInParent(parent: WorkspaceSplit, index: number): WorkspaceLeaf;
-				// setActiveLeaf(leaf: WorkspaceLeaf, params?: {focus?: boolean;}): void;
 				f.then((file) => {
 					leaf.openFile(file, { active: true });
 				});
-				// WorkspaceLeaf.openFile()
-				// openFile(file: TFile, openState?: OpenViewState): Promise<void>;
 			},
 		});
 
@@ -265,7 +256,7 @@ export default class MyPlugin extends Plugin {
 			id: "safe-delete",
 			name: "Safe Delete",
 			// @ts-ignore
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			callback: () => {
 				const file = app.workspace.getActiveFile();
 				const fm = app.metadataCache.getFileCache(file).frontmatter;
 				if (fm === undefined) {
@@ -316,7 +307,7 @@ export default class MyPlugin extends Plugin {
 			id: "go-parent",
 			name: "Go Parent",
 			// @ts-ignore
-			editorCallback: (editor: Editor, view: MarkdownView) => {
+			callback: () => {
 				const file = app.workspace.getActiveFile();
 				const fm = app.metadataCache.getFileCache(file).frontmatter;
 				if (fm === undefined) {
