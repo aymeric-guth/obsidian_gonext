@@ -144,8 +144,11 @@ export default class MyPlugin extends Plugin {
 		// this.app.dom.statusBarEl.appendChild(el);
 
 		const getFileCacheFromLeaf = function(leaf) {
+			// @ts-ignore
 			const file = leaf.view.getSyncViewState().state.file;
+			// @ts-ignore
 			const abstractPath = app.vault.getAbstractFileByPath(file);
+			// @ts-ignore
 			return app.metadataCache.getFileCache(abstractPath);
 		}
 
