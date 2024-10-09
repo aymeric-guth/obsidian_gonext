@@ -25,7 +25,7 @@ import {
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 // import { randomUUID } from "crypto";
 // const { randomUUID } = require("crypto");
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -42,6 +42,22 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 class Current {
 	constructor() { }
 }
+
+const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const monthShort = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+];
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
@@ -119,13 +135,19 @@ export default class MyPlugin extends Plugin {
 			app: this.app,
 		};
 
-		this.taskInStatusBar = this.addStatusBarItem();
-		this.taskInStatusBar.setText("");
+		// this.taskInStatusBar = this.addStatusBarItem();
+		// this.taskInStatusBar.setText("");
 
 		// console.log(window.app);
 		// this.statusBar = this.app.createDiv();
 		// this.statusBar.innerHTML = "";
 		// this.app.dom.statusBarEl.appendChild(el);
+
+		const getFileCacheFromLeaf = function(leaf) {
+			const file = leaf.view.getSyncViewState().state.file;
+			const abstractPath = app.vault.getAbstractFileByPath(file);
+			return app.metadataCache.getFileCache(abstractPath);
+		}
 
 		this.app.workspace.on("active-leaf-change", () => {
 			// const activeTasks = this.dv
@@ -134,55 +156,59 @@ export default class MyPlugin extends Plugin {
 			// this.taskInStatusBar.setText(`${activeTasks.length} active`);
 
 			// @ts-ignore
-			const root = app.workspace.activeLeaf.parent;
-			for (const leaf of root.children) {
-				// @ts-ignore
-				const tabTitleOrig = leaf.tabHeaderInnerTitleEl.innerText;
-				// @ts-ignore
-				if (tabTitleOrig.length !== 36) {
-					// console.warn("'tabTitleOrig.length' !== 36");
-					continue;
-				}
+			const root = this.app.workspace.activeLeaf.parent;
 
+			for (const leaf of root.children) {
 				let path = undefined;
 				try {
 					path = leaf.view.getSyncViewState().state.file;
 				} catch {
 					continue;
 				}
-				const file = app.vault.getAbstractFileByPath(path);
+				const file = this.app.vault.getAbstractFileByPath(path);
 				// @ts-ignore
-				const fm = app.metadataCache.getFileCache(file).frontmatter;
+				const fm =
+					this.app.metadataCache.getFileCache(file).frontmatter;
 
 				if (fm === undefined) {
 					continue;
 				}
 
 				let text = "";
+				// console.log(`Helper.getProject(fm): ${Helper.getProject(fm)}`);
+
 				if (
 					fm.type === 3 &&
 					Helper.getProject(fm) !== undefined &&
 					Helper.getProject(fm) === "project/daily"
 				) {
 					const at = new Date(fm.at);
-					const day = [
-						"Sun",
-						"Mon",
-						"Tue",
-						"Wed",
-						"Thu",
-						"Fri",
-						"Sat",
-					][at.getDay()];
-					text = `${day}. ${at.toISOString().slice(0, 10)}`;
-				} else {
-					// @ts-ignore
-					text = fm.alias;
-					// @ts-ignore
-					if (Helper.nilCheck(text) || text === "") {
-						return;
+					// 📅
+					text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+				} else if (fm.type === 2) {
+					if (!Helper.nilCheck(fm.alias)) {
+						text = `📜 ${fm.alias}`;
+					} else {
+						// read level 3 heading
+						const note = getFileCacheFromLeaf(leaf);
+						if (note.headings.length < 1) {
+							continue;
+						}
+
+						for (const heading of note.headings) {
+							if (heading.level === 3) {
+								text = `📜 ${heading.heading}`;
+								break;
+							}
+						}
 					}
+				} else if (fm.type === 20) {
+					const at = new Date(fm.created_at);
+					text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+				} else {
+					continue;
 				}
+				// 📓
 				// @ts-ignore
 				leaf.tabHeaderInnerTitleEl.innerText = text;
 				// @ts-ignore
@@ -235,9 +261,11 @@ export default class MyPlugin extends Plugin {
 				note.path = `800 Inbox/${note.uuid}.md`;
 				note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
 
-				const f = this.app.vault.create(note.path, note.data).then((f) => {
-					return f;
-				});
+				const f = this.app.vault
+					.create(note.path, note.data)
+					.then((f) => {
+						return f;
+					});
 				const active = this.app.workspace.activeLeaf;
 				// @ts-ignore
 				const root = active.parent;
