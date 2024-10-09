@@ -171,6 +171,7 @@ export default class MyPlugin extends Plugin {
 				const file = this.app.vault.getAbstractFileByPath(path);
 				// @ts-ignore
 				const fm =
+					// @ts-ignore
 					this.app.metadataCache.getFileCache(file).frontmatter;
 
 				if (fm === undefined) {
