@@ -183,12 +183,15 @@ export default class MyPlugin extends Plugin {
 
 				if (
 					fm.type === 3 &&
-					Helper.getProject(fm) !== undefined &&
-					Helper.getProject(fm) === "project/daily"
+					Helper.getProject(fm) !== undefined
 				) {
-					const at = new Date(fm.at);
-					// 📅
-					text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+					if (Helper.getProject(fm) === "project/daily") {
+						const at = new Date(fm.at);
+						text = `(D) ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+						// text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+					} else {
+						text = `(T) ${Helper.getProject(fm).slice(8)}`;
+					}
 				} else if (fm.type === 2) {
 					if (!Helper.nilCheck(fm.alias)) {
 						text = `📜 ${fm.alias}`;
@@ -208,7 +211,14 @@ export default class MyPlugin extends Plugin {
 					}
 				} else if (fm.type === 20) {
 					const at = new Date(fm.created_at);
-					text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+					// text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+					text = `(J) ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+				} else if (fm.type === 12) {
+					if (fm.name !== undefined && fm.name !== "") {
+						text = `(P) ${fm.name}`;
+					}
+				} else if (fm.type === 13) {
+					text = `(I) ${fm.uuid}`;
 				} else {
 					continue;
 				}
