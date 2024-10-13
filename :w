@@ -154,11 +154,6 @@ export default class MyPlugin extends Plugin {
 			return app.metadataCache.getFileCache(abstractPath);
 		};
 
-		const getFileFromLeaf = function(leaf) {
-			// @ts-ignore
-			return leaf.view.getSyncViewState().state.file;
-		};
-
 		this.app.workspace.on("active-leaf-change", () => {
 			// const activeTasks = this.dv
 			// 	.pages(`"813 Tasks"`)
@@ -240,26 +235,12 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				const now = new Date();
-				const nowIso = now.toISOString().slice(0, 10);
 				// @ts-ignore
 				const pages = this.dv
-					.pages(`"${Paths.Tasks}"`)
+					.pages(`"${Paths.Tasks}}"`)
 					.where((page) => {
-						if (page.file.frontmatter.at === undefined) {
-							return false;
-						}
-
-						// assign now si at === undefined
-						const fm = new FrontmatterJS(page);
-						let fmIso = undefined;
-						try {
-							fmIso = fm.at.toISOString().slice(0, 10);
-						} catch {
-							console.warn(`possible invalid data in ${fm.uuid}`);
-							return false;
-						}
-
-						if (fmIso === nowIso) {
+						const fm = new FrontmatterJS(page.file.frontmatter);
+						if (fm.createdAt.toISOString().slice(0, 10) === now.toISOString().slice(0, 10)) {
 							return true;
 						}
 
@@ -267,34 +248,22 @@ export default class MyPlugin extends Plugin {
 					});
 
 				if (pages.length === 0) {
+					console.log("no daily found");
 					return;
 				}
 
 				const page = pages[0];
+				console.log(page);
 				const active = this.app.workspace.activeLeaf;
 				// @ts-ignore
 				const root = active.parent;
-				// rechercher si pas déja ouvert dans les onglets actifs
-				// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
-				let found = false;
-				for (const leaf of root.children) {
-					const file = getFileCacheFromLeaf(leaf);
-					if (file.frontmatter.uuid === page.file.frontmatter.uuid) {
-						found = true;
-						break;
-					}
-				}
-
+				this.app.workspace.createLeafInParent(
+					root,
+					root.children.length + 1,
+				);
 				const leaf = root.children[root.children.length - 1];
-				if (found) {
-					leaf.openFile(app.vault.getAbstractFileByPath(page.file.path), { active: true });
-				} else {
-					this.app.workspace.createLeafInParent(
-						root,
-						root.children.length + 1,
-					);
-					leaf.openFile(app.vault.getAbstractFileByPath(page.file.path), { active: true });
-				}
+
+				leaf.openFile(pages[0].file, { active: true });
 			},
 		});
 

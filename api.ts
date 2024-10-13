@@ -66,7 +66,7 @@ class FilterBy {
 	}
 }
 
-class FrontmatterJS {
+export class FrontmatterJS {
 	public uuid: string;
 	public version: string;
 	public type: number;
@@ -676,7 +676,12 @@ export const AutoField = {
 			}
 
 			let jCurrent = null;
+			// la fiche homecook se trouve toujours à la date j-1
+			const currentMinusOne = new Date(fm.createdAt.getTime() - (24 * 60 * 60 * 1000));
 			try {
+				// on s'intéresse au repas de la veille dans healmon
+				// ne couvre pas ou le repas est pris apres 00h le jour en cours
+				// sera géré avec la fiche directement pour le moment
 				jCurrent = jFm.createdAt.toISOString().slice(0, 10);
 			} catch {
 				dv.paragraph(
@@ -685,15 +690,15 @@ export const AutoField = {
 				console.error(jFm);
 			}
 
-			if (current !== jCurrent) {
+			if (currentMinusOne.toISOString().slice(0, 10) !== jCurrent) {
 				return false;
 			}
 
 			return true;
 		});
 
+		dv.header(4, "repas (veille)");
 		if (pages.length) {
-			dv.header(4, "repas");
 			for (const page of pages) {
 				dv.paragraph(Renderer.makeLinkShortUUID(dv, page.file));
 			}
@@ -4238,9 +4243,24 @@ export class DvLib {
 			return;
 		}
 
+		const projectName = Helper.getProject(fm);
+		if (projectName !== undefined) {
+			const projects = dv.pages(`"Projects"`).where((fmP) => {
+				if (fmP.name === projectName.slice(8)) {
+					return true;
+				}
+
+				return false;
+			});
+			if (projects.length) {
+				dv.header(2, "Project");
+				dv.paragraph(Renderer.makeLinkName(dv, projects[0].file));
+				// dv.paragraph(dv.fileLink(`Projects/${projects[0].file.frontmatter.uuid}`));
+			}
+		}
 		this.autoFieldNeed(dv, fm);
 		this.autoFieldNeededBy(dv, current);
-		this.autoFieldTags(dv, fm);
+		// this.autoFieldTags(dv, fm);
 
 		const logEntries = dv
 			.pages(`"${this.logDir}/${fm.uuid}"`)
