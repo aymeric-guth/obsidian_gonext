@@ -146,8 +146,13 @@ export default class MyPlugin extends Plugin {
 		// this.app.dom.statusBarEl.appendChild(el);
 
 		const getFileCacheFromLeaf = function(leaf) {
-			// @ts-ignore
-			const file = leaf.view.getSyncViewState().state.file;
+			let file = undefined;
+			try {
+				// @ts-ignore
+				file = leaf.view.getSyncViewState().state.file;
+			} catch {
+				return undefined;
+			}
 			// @ts-ignore
 			const abstractPath = app.vault.getAbstractFileByPath(file);
 			// @ts-ignore
@@ -191,7 +196,7 @@ export default class MyPlugin extends Plugin {
 				if (fm.type === 3 && Helper.getProject(fm) !== undefined) {
 					if (Helper.getProject(fm) === "project/daily") {
 						const at = new Date(fm.at);
-						text = `(D) ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+						text = `(D) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
 						// text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
 					} else {
 						text = `(T) ${Helper.getProject(fm).slice(8)}`;
@@ -206,17 +211,22 @@ export default class MyPlugin extends Plugin {
 							continue;
 						}
 
+						let found = false;
 						for (const heading of note.headings) {
 							if (heading.level === 3) {
+								found = true;
 								text = `📜 ${heading.heading}`;
 								break;
 							}
 						}
+						if (!found) {
+							text = note.frontmatter.uuid;
+						}
 					}
 				} else if (fm.type === 20) {
-					const at = new Date(fm.created_at);
+					const createdAt = new Date(fm.created_at);
 					// text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
-					text = `(J) ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+					text = `(J) ${dayShort[createdAt.getDay()]}. ${createdAt.getDate()} ${monthShort[createdAt.getMonth()]}`;
 				} else if (fm.type === 12) {
 					if (fm.name !== undefined && fm.name !== "") {
 						text = `(P) ${fm.name}`;
@@ -226,14 +236,75 @@ export default class MyPlugin extends Plugin {
 				} else {
 					continue;
 				}
-				// 📓
-				// @ts-ignore
-				leaf.tabHeaderInnerTitleEl.innerText = text;
-				// @ts-ignore
-				leaf.tabHeaderInnerTitleEl.innerHTML = text;
+				if (text !== "") {
+					// 📓
+					// @ts-ignore
+					leaf.tabHeaderInnerTitleEl.innerText = text;
+					// @ts-ignore
+					leaf.tabHeaderInnerTitleEl.innerHTML = text;
+				}
 			}
 		});
 
+		this.addCommand({
+			id: "goto-active-task",
+			name: "Goto Active Task",
+			// @ts-ignore
+			callback: () => {
+				// @ts-ignore
+				const pages = this.dv
+					.pages(`"${Paths.Tasks}"`)
+					.where((page) => {
+						if (page.file.frontmatter.status === "doing") {
+							return true;
+						}
+
+						return false;
+					});
+
+				console.log(`found ${pages.length} active task(s)`);
+				if (pages.length === 0) {
+					return;
+				}
+
+				const page = pages[0];
+				const active = this.app.workspace.activeLeaf;
+				// @ts-ignore
+				const root = active.parent;
+				// rechercher si pas déja ouvert dans les onglets actifs
+				// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
+				let found = false;
+				let node = undefined;
+				for (const leaf of root.children) {
+					const file = getFileCacheFromLeaf(leaf);
+					if (
+						file !== undefined &&
+						file.frontmatter !== undefined &&
+						file.frontmatter.uuid === page.file.frontmatter.uuid
+					) {
+						found = true;
+						node = leaf;
+						break;
+					}
+				}
+
+				if (!found) {
+					if (getFileCacheFromLeaf(active) !== undefined) {
+						this.app.workspace.createLeafInParent(
+							root,
+							root.children.length + 1,
+						);
+						node = root.children[root.children.length - 1];
+					} else {
+						node = active;
+					}
+				}
+
+				node.openFile(app.vault.getAbstractFileByPath(page.file.path), {
+					active: true,
+				});
+			},
+		});
 		this.addCommand({
 			id: "open-todays-daily",
 			name: "Open Today's Daily",
@@ -285,16 +356,16 @@ export default class MyPlugin extends Plugin {
 					}
 				}
 
-				const leaf = root.children[root.children.length - 1];
-				if (found) {
-					leaf.openFile(app.vault.getAbstractFileByPath(page.file.path), { active: true });
-				} else {
+				if (!found) {
 					this.app.workspace.createLeafInParent(
 						root,
 						root.children.length + 1,
 					);
-					leaf.openFile(app.vault.getAbstractFileByPath(page.file.path), { active: true });
 				}
+				const leaf = root.children[root.children.length - 1];
+				leaf.openFile(app.vault.getAbstractFileByPath(page.file.path), {
+					active: true,
+				});
 			},
 		});
 
