@@ -78,25 +78,63 @@ export default class MyPlugin extends Plugin {
 		console.log("Couou, tu veux voir ma bite?");
 	}
 
-	// reviewLog() {
-	// 	const fm = this.getCurrentFrontmatter();
-	// 	if (fm === undefined) {
-	// 		return;
-	// 	}
-	//
-	// 	if (fm.type === undefined) {
-	// 		// console.warn(`file: ${fm} does not have a valid schema`);
-	// 		return;
-	// 	}
-	//
-	// 	if (fm.type !== 6) {
-	// 		// console.warn(`file: ${fm} is not of "log" type`);
-	// 		return;
-	// 	}
-	//
-	// 	const currentReviewed = fm.reviewed;
-	// 	// obsidian plugin API, write file on disk, frontmatter changed
-	// }
+	openInNewTabIfNotOpened(page) {
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		// rechercher si pas déja ouvert dans les onglets actifs
+		// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
+		let found = false;
+		let node = undefined;
+		const emptyTabs = [];
+
+		for (const leaf of root.children) {
+			const file = this.getFileCacheFromLeaf(leaf);
+			if (file === undefined) {
+				emptyTabs.push(leaf);
+				continue;
+			}
+
+			if (
+				file.frontmatter !== undefined &&
+				file.frontmatter.uuid === page.file.frontmatter.uuid
+			) {
+				found = true;
+				node = leaf;
+				break;
+			}
+		}
+
+		if (!found) {
+			if (emptyTabs.length > 0) {
+				node = emptyTabs[0];
+			} else {
+				this.app.workspace.createLeafInParent(
+					root,
+					root.children.length + 1,
+				);
+				node = root.children[root.children.length - 1];
+			}
+		}
+
+		node.openFile(this.app.vault.getAbstractFileByPath(page.file.path), {
+			active: true,
+		});
+	}
+
+	getFileCacheFromLeaf(leaf) {
+		let file = undefined;
+		try {
+			// @ts-ignore
+			file = leaf.view.getSyncViewState().state.file;
+		} catch {
+			return undefined;
+		}
+		// @ts-ignore
+		const abstractPath = app.vault.getAbstractFileByPath(file);
+		// @ts-ignore
+		return app.metadataCache.getFileCache(abstractPath);
+	}
 
 	async onload() {
 		console.log("gonext - onload()");
@@ -135,33 +173,6 @@ export default class MyPlugin extends Plugin {
 			state: window.gonext?.state ?? {},
 			// @ts-ignore
 			app: this.app,
-		};
-
-		// this.taskInStatusBar = this.addStatusBarItem();
-		// this.taskInStatusBar.setText("");
-
-		// console.log(window.app);
-		// this.statusBar = this.app.createDiv();
-		// this.statusBar.innerHTML = "";
-		// this.app.dom.statusBarEl.appendChild(el);
-
-		const getFileCacheFromLeaf = function(leaf) {
-			let file = undefined;
-			try {
-				// @ts-ignore
-				file = leaf.view.getSyncViewState().state.file;
-			} catch {
-				return undefined;
-			}
-			// @ts-ignore
-			const abstractPath = app.vault.getAbstractFileByPath(file);
-			// @ts-ignore
-			return app.metadataCache.getFileCache(abstractPath);
-		};
-
-		const getFileFromLeaf = function(leaf) {
-			// @ts-ignore
-			return leaf.view.getSyncViewState().state.file;
 		};
 
 		this.app.workspace.on("active-leaf-change", () => {
@@ -203,10 +214,29 @@ export default class MyPlugin extends Plugin {
 					}
 				} else if (fm.type === 2) {
 					if (!Helper.nilCheck(fm.alias)) {
-						text = `📜 ${fm.alias}`;
+						let buff = "";
+						for (const alias of fm.alias) {
+							if (buff.length === 0) {
+								buff = alias;
+							} else if (alias.length < buff.length) {
+								buff = alias;
+							}
+						}
+
+						const note = this.getFileCacheFromLeaf(leaf);
+						text = `📜 ${buff}`;
+
+						if (note.headings.length > 1) {
+							for (const heading of note.headings) {
+								if (heading.level === 3 && heading.heading === "index") {
+									text = `(I) ${buff}`;
+									break;
+								}
+							}
+						}
 					} else {
 						// read level 3 heading
-						const note = getFileCacheFromLeaf(leaf);
+						const note = this.getFileCacheFromLeaf(leaf);
 						if (note.headings.length < 1) {
 							continue;
 						}
@@ -267,44 +297,10 @@ export default class MyPlugin extends Plugin {
 					return;
 				}
 
-				const page = pages[0];
-				const active = this.app.workspace.activeLeaf;
-				// @ts-ignore
-				const root = active.parent;
-				// rechercher si pas déja ouvert dans les onglets actifs
-				// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
-				let found = false;
-				let node = undefined;
-				for (const leaf of root.children) {
-					const file = getFileCacheFromLeaf(leaf);
-					if (
-						file !== undefined &&
-						file.frontmatter !== undefined &&
-						file.frontmatter.uuid === page.file.frontmatter.uuid
-					) {
-						found = true;
-						node = leaf;
-						break;
-					}
-				}
-
-				if (!found) {
-					if (getFileCacheFromLeaf(active) !== undefined) {
-						this.app.workspace.createLeafInParent(
-							root,
-							root.children.length + 1,
-						);
-						node = root.children[root.children.length - 1];
-					} else {
-						node = active;
-					}
-				}
-
-				node.openFile(app.vault.getAbstractFileByPath(page.file.path), {
-					active: true,
-				});
+				this.openInNewTabIfNotOpened(pages[0]);
 			},
 		});
+
 		this.addCommand({
 			id: "open-todays-daily",
 			name: "Open Today's Daily",
@@ -345,31 +341,7 @@ export default class MyPlugin extends Plugin {
 					return;
 				}
 
-				const page = pages[0];
-				const active = this.app.workspace.activeLeaf;
-				// @ts-ignore
-				const root = active.parent;
-				// rechercher si pas déja ouvert dans les onglets actifs
-				// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
-				let found = false;
-				for (const leaf of root.children) {
-					const file = getFileCacheFromLeaf(leaf);
-					if (file.frontmatter.uuid === page.file.frontmatter.uuid) {
-						found = true;
-						break;
-					}
-				}
-
-				if (!found) {
-					this.app.workspace.createLeafInParent(
-						root,
-						root.children.length + 1,
-					);
-				}
-				const leaf = root.children[root.children.length - 1];
-				leaf.openFile(app.vault.getAbstractFileByPath(page.file.path), {
-					active: true,
-				});
+				this.openInNewTabIfNotOpened(pages[0]);
 			},
 		});
 
