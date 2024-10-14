@@ -322,6 +322,10 @@ export default class MyPlugin extends Plugin {
 
 						// assign now si at === undefined
 						const fm = new FrontmatterJS(page);
+						if (fm.getProject() !== "daily") {
+							return false;
+						}
+
 						let fmIso = undefined;
 						try {
 							fmIso = fm.at.toISOString().slice(0, 10);
