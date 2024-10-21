@@ -1022,6 +1022,39 @@ export const AutoField = {
 			}
 		}
 		dv.table(["uuid", "at"], buff);
+
+		// AutoField.dailyJoural(dv);
+	},
+
+	dailyJoural(dv) {
+		const current = new FrontmatterJS(dv.current());
+		const currentAtShort = current.at.toISOString().slice(0, 10);
+			console.log(currentAtShort)
+		const pages = dv.pages(`"Journal"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			const atShort = fm.createdAt.toISOString().slice(0, 10);
+			if (atShort === currentAtShort) {
+				return true;
+			}
+
+			return false;
+		}).sort((k) => k.created_at, "asc");
+
+		dv.header(2, "Journal");
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			if (page.file.frontmatter.alias !== undefined) {
+				page.file.frontmatter.name = page.file.frontmatter.alias;
+			} else if (fm.getProject() !== undefined) {
+				page.file.frontmatter.name = fm.getProject();
+			} else if (fm.getDomain() !== undefined) {
+				page.file.frontmatter.name = fm.getDomain();
+			}
+
+			dv.paragraph(Renderer.makeLinkName(dv, page.file));
+			// dv.paragraph(Renderer.makeLinkAlias(dv, page.file));
+		}
+
 	},
 
 	dailyGoals(dv) {

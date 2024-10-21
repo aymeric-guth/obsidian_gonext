@@ -136,6 +136,109 @@ export default class MyPlugin extends Plugin {
 		return app.metadataCache.getFileCache(abstractPath);
 	}
 
+	sneakyTabRenamer(app) {
+		// @ts-ignore
+		const root = app.workspace.activeLeaf.parent;
+
+		for (const leaf of root.children) {
+			let path = undefined;
+			try {
+				path = leaf.view.getSyncViewState().state.file;
+			} catch {
+				continue;
+			}
+			const file = app.vault.getAbstractFileByPath(path);
+			// @ts-ignore
+			const fm =
+				// @ts-ignore
+				app.metadataCache.getFileCache(file).frontmatter;
+
+			if (fm === undefined) {
+				continue;
+			}
+
+			let text = "";
+			// console.log(`Helper.getProject(fm): ${Helper.getProject(fm)}`);
+
+			if (fm.type === 3 && Helper.getProject(fm) !== undefined) {
+				if (Helper.getProject(fm) === "project/daily") {
+					const at = new Date(fm.at);
+					text = `(D) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
+					// text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+				} else {
+					text = `(T) ${Helper.getProject(fm).slice(8)}`;
+				}
+			} else if (fm.type === 2) {
+				if (!Helper.nilCheck(fm.alias)) {
+					let buff = "";
+					for (const alias of fm.alias) {
+						if (buff.length === 0) {
+							buff = alias;
+						} else if (alias.length < buff.length) {
+							buff = alias;
+						}
+					}
+
+					const note = this.getFileCacheFromLeaf(leaf);
+					text = `📜 ${buff}`;
+
+					if (note.headings.length > 1) {
+						for (const heading of note.headings) {
+							if (
+								heading.level === 3 &&
+								heading.heading === "index"
+							) {
+								text = `(I) ${buff}`;
+								break;
+							}
+						}
+					}
+				} else {
+					// read level 3 heading
+					const note = this.getFileCacheFromLeaf(leaf);
+					if (note.headings.length < 1) {
+						continue;
+					}
+
+					let found = false;
+					for (const heading of note.headings) {
+						if (heading.level === 3) {
+							found = true;
+							text = `📜 ${heading.heading}`;
+							break;
+						}
+					}
+					if (!found) {
+						text = note.frontmatter.uuid;
+					}
+				}
+			} else if (fm.type === 20) {
+				const createdAt = new Date(fm.created_at);
+				// text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
+				if (fm.alias !== undefined) {
+				text = `(J) ${fm.alias}`;
+				} else {
+				text = `(J) ${dayShort[createdAt.getDay()]}. ${createdAt.getDate()} ${monthShort[createdAt.getMonth()]}`;
+				}
+			} else if (fm.type === 12) {
+				if (fm.name !== undefined && fm.name !== "") {
+					text = `(P) ${fm.name}`;
+				}
+			} else if (fm.type === 13) {
+				text = `(I) ${fm.uuid}`;
+			} else {
+				continue;
+			}
+			if (text !== "") {
+				// 📓
+				// @ts-ignore
+				leaf.tabHeaderInnerTitleEl.innerText = text;
+				// @ts-ignore
+				leaf.tabHeaderInnerTitleEl.innerHTML = text;
+			}
+		}
+	}
+
 	async onload() {
 		console.log("gonext - onload()");
 		await this.loadSettings();
@@ -176,104 +279,13 @@ export default class MyPlugin extends Plugin {
 		};
 
 		this.app.workspace.on("active-leaf-change", () => {
-			// const activeTasks = this.dv
-			// 	.pages(`"813 Tasks"`)
-			// 	.where((fm) => fm.status === "doing");
-			// this.taskInStatusBar.setText(`${activeTasks.length} active`);
-
-			// @ts-ignore
-			const root = this.app.workspace.activeLeaf.parent;
-
-			for (const leaf of root.children) {
-				let path = undefined;
-				try {
-					path = leaf.view.getSyncViewState().state.file;
-				} catch {
-					continue;
-				}
-				const file = this.app.vault.getAbstractFileByPath(path);
-				// @ts-ignore
-				const fm =
-					// @ts-ignore
-					this.app.metadataCache.getFileCache(file).frontmatter;
-
-				if (fm === undefined) {
-					continue;
-				}
-
-				let text = "";
-				// console.log(`Helper.getProject(fm): ${Helper.getProject(fm)}`);
-
-				if (fm.type === 3 && Helper.getProject(fm) !== undefined) {
-					if (Helper.getProject(fm) === "project/daily") {
-						const at = new Date(fm.at);
-						text = `(D) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
-						// text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
-					} else {
-						text = `(T) ${Helper.getProject(fm).slice(8)}`;
-					}
-				} else if (fm.type === 2) {
-					if (!Helper.nilCheck(fm.alias)) {
-						let buff = "";
-						for (const alias of fm.alias) {
-							if (buff.length === 0) {
-								buff = alias;
-							} else if (alias.length < buff.length) {
-								buff = alias;
-							}
-						}
-
-						const note = this.getFileCacheFromLeaf(leaf);
-						text = `📜 ${buff}`;
-
-						if (note.headings.length > 1) {
-							for (const heading of note.headings) {
-								if (heading.level === 3 && heading.heading === "index") {
-									text = `(I) ${buff}`;
-									break;
-								}
-							}
-						}
-					} else {
-						// read level 3 heading
-						const note = this.getFileCacheFromLeaf(leaf);
-						if (note.headings.length < 1) {
-							continue;
-						}
-
-						let found = false;
-						for (const heading of note.headings) {
-							if (heading.level === 3) {
-								found = true;
-								text = `📜 ${heading.heading}`;
-								break;
-							}
-						}
-						if (!found) {
-							text = note.frontmatter.uuid;
-						}
-					}
-				} else if (fm.type === 20) {
-					const createdAt = new Date(fm.created_at);
-					// text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
-					text = `(J) ${dayShort[createdAt.getDay()]}. ${createdAt.getDate()} ${monthShort[createdAt.getMonth()]}`;
-				} else if (fm.type === 12) {
-					if (fm.name !== undefined && fm.name !== "") {
-						text = `(P) ${fm.name}`;
-					}
-				} else if (fm.type === 13) {
-					text = `(I) ${fm.uuid}`;
-				} else {
-					continue;
-				}
-				if (text !== "") {
-					// 📓
-					// @ts-ignore
-					leaf.tabHeaderInnerTitleEl.innerText = text;
-					// @ts-ignore
-					leaf.tabHeaderInnerTitleEl.innerHTML = text;
-				}
-			}
+			return this.sneakyTabRenamer(this.app);
+		});
+		this.app.workspace.on("quick-preview", () => {
+			return this.sneakyTabRenamer(this.app);
+		});
+		this.app.workspace.on("resize", () => {
+			return this.sneakyTabRenamer(this.app);
 		});
 
 		this.addCommand({
