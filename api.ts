@@ -8,6 +8,7 @@ import {
 	Default,
 	GoalStatus,
 } from "./constants";
+import { v4 as uuidv4 } from "uuid";
 
 class FilterBy {
 	public fm: any;
@@ -84,6 +85,7 @@ export class FrontmatterJS {
 	public contexts: string[];
 	public status: string;
 	public f;
+	public energy: number;
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
@@ -152,6 +154,7 @@ export class FrontmatterJS {
 		this.projects = [];
 		this.contexts = [];
 		this.traits = [];
+		this.energy = this.fm.energy !== undefined ? this.fm.energy : 9;
 
 		const domains = [];
 		const components = [];
@@ -677,7 +680,9 @@ export const AutoField = {
 
 			let jCurrent = null;
 			// la fiche homecook se trouve toujours à la date j-1
-			const currentMinusOne = new Date(fm.createdAt.getTime() - (24 * 60 * 60 * 1000));
+			const currentMinusOne = new Date(
+				fm.createdAt.getTime() - 24 * 60 * 60 * 1000,
+			);
 			try {
 				// on s'intéresse au repas de la veille dans healmon
 				// ne couvre pas ou le repas est pris apres 00h le jour en cours
@@ -1023,22 +1028,25 @@ export const AutoField = {
 		}
 		dv.table(["uuid", "at"], buff);
 
-		// AutoField.dailyJoural(dv);
+		AutoField.dailyJoural(dv);
 	},
 
 	dailyJoural(dv) {
 		const current = new FrontmatterJS(dv.current());
 		const currentAtShort = current.at.toISOString().slice(0, 10);
-			console.log(currentAtShort)
-		const pages = dv.pages(`"Journal"`).where((page) => {
-			const fm = new FrontmatterJS(page);
-			const atShort = fm.createdAt.toISOString().slice(0, 10);
-			if (atShort === currentAtShort) {
-				return true;
-			}
+		console.log(currentAtShort);
+		const pages = dv
+			.pages(`"Journal"`)
+			.where((page) => {
+				const fm = new FrontmatterJS(page);
+				const atShort = fm.createdAt.toISOString().slice(0, 10);
+				if (atShort === currentAtShort) {
+					return true;
+				}
 
-			return false;
-		}).sort((k) => k.created_at, "asc");
+				return false;
+			})
+			.sort((k) => k.created_at, "asc");
 
 		dv.header(2, "Journal");
 		for (const page of pages) {
@@ -1054,7 +1062,6 @@ export const AutoField = {
 			dv.paragraph(Renderer.makeLinkName(dv, page.file));
 			// dv.paragraph(Renderer.makeLinkAlias(dv, page.file));
 		}
-
 	},
 
 	dailyGoals(dv) {
@@ -2169,6 +2176,45 @@ export class NoteHelper {
 	}
 }
 
+export class Generator {
+	app: any;
+	dv: any;
+	gonext: any;
+
+	constructor(app) {
+		this.app = app;
+		this.dv = app.dv;
+		this.gonext = app.gonext;
+	}
+
+	fleeting() {
+		const dt = new Date();
+		const note = {
+			uuid: uuidv4(),
+			type: 13,
+			version: "0.0.4",
+			created_at: dt.toISOString(),
+			path: "",
+			data: "",
+		};
+
+		note.path = `800 Inbox/${note.uuid}.md`;
+		note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
+
+		const f = this.app.vault.create(note.path, note.data).then((f) => {
+			return f;
+		});
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		this.app.workspace.createLeafInParent(root, root.children.length + 1);
+		const leaf = root.children[root.children.length - 1];
+		f.then((file) => {
+			leaf.openFile(file, { active: true });
+		});
+	}
+}
+
 export class ListMaker {
 	dv: any;
 	gonext: any;
@@ -3242,6 +3288,287 @@ export class ListMaker {
 	getMonthName(monthNumber) {
 		const date = new Date(2000, monthNumber - 1); // Year 2000 is used arbitrarily; any non-leap year will do
 		return date.toLocaleString("default", { month: "long" });
+	}
+
+	energy(dv) {
+		const current = dv.current();
+		if (current.energy === undefined) {
+			current.energy = 0;
+		}
+		let comp = undefined;
+		switch (current.op) {
+			case '>':
+				comp = (a, b) => a > b
+			break;
+			case '>=':
+				comp = (a, b) => a >= b
+			break;
+			case '<':
+				comp = (a, b) => a < b
+			break;
+			case '<=':
+				comp = (a, b) => a <= b
+			break;
+			default:
+				comp = (a, b) => a === b
+			break;
+		}
+
+		const rs = [];
+		const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
+			const fm = new FrontmatterJS(page);
+			if (fm.getProject() === "daily") {
+				return false;
+			}
+
+			if (fm.fm.status !== "todo") {
+				return false;
+			}
+
+			return comp(fm.energy, current.energy);
+		});
+		
+
+		rs.push(["array", (dv, data) => {
+			for (const entry of data) {
+				console.log(entry)
+				dv.paragraph(Renderer.makeLinkAlias(dv, entry.file, "## Task"));
+			}
+		}, pages]);
+
+		return rs;
+	}
+
+	mandala(dv) {
+		let mandalaLo = -1;
+		let mandalaHi = -1;
+		const now = new Date();
+		{
+			const weekNumber = this.getWeekNumber4(now);
+			mandalaLo = weekNumber - 6;
+			mandalaHi = weekNumber - 5;
+			if (mandalaLo < 0 || mandalaHi < 0) {
+				dv.paragraph(`weekNumber: ${weekNumber}`);
+				dv.paragraph(`mandalaLo: ${mandalaLo}`);
+				dv.paragraph(`mandalaHi: ${mandalaHi}`);
+				return;
+			}
+			dv.paragraph(`weekNumber: ${weekNumber}`);
+			dv.paragraph(`mandalaLo: ${mandalaLo}`);
+			dv.paragraph(`mandalaHi: ${mandalaHi}`);
+		}
+
+		const rs = [];
+		const bins = {};
+		const suiviWeekly = {};
+		const suiviMonthly = {};
+		const suiviYearly = {};
+		const pages = this.dv
+			.pages(`"Journal"`)
+			.where((page) => {
+				const fm = new FrontmatterJS(page);
+				const weekNumber = this.getWeekNumber4(fm.createdAt);
+				console.log(weekNumber);
+				if (
+					weekNumber >= mandalaLo &&
+					weekNumber <= mandalaHi &&
+					fm.createdAt.getFullYear() === now.getFullYear()
+				) {
+					return true;
+				}
+
+				return false;
+			})
+			.sort((page) => page.file.frontmatter.created_at, "desc");
+		console.log(pages.length);
+
+		for (const page of pages) {
+			const fm = new FrontmatterJS(page);
+			// const weekNumber = this.getWeekNumber(fm.createdAt);
+			const weekNumber = this.getWeekNumber4(fm.createdAt);
+			const year = fm.createdAt.getFullYear();
+			const month = fm.createdAt.getMonth() + 1;
+
+			let msg = "";
+			msg += `createdAt: ${fm.createdAt.toISOString().slice(0, 10)}\n`;
+			msg += `weekNumber: ${weekNumber}\n`;
+			msg += `year: ${year}\n`;
+			msg += `month: ${month}\n`;
+			msg += `day: ${fm.createdAt.getDay()}\n`;
+			const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+				fm.createdAt.getDay()
+			];
+			msg += `day: ${day}\n`;
+
+			console.log(msg);
+
+			if (bins[year] === undefined) {
+				bins[year] = {};
+			}
+			if (bins[year][weekNumber.toString()] === undefined) {
+				bins[year][weekNumber.toString()] = {};
+			}
+			if (suiviMonthly[year] === undefined) {
+				suiviMonthly[year] = {};
+			}
+			if (suiviWeekly[year] === undefined) {
+				suiviWeekly[year] = {};
+			}
+
+			let tag = "";
+			if (fm.getDomain() !== undefined) {
+				tag = fm.getDomain();
+			} else if (fm.getProject() !== undefined) {
+				tag = fm.getProject();
+			} else {
+				tag = "adhoc";
+			}
+
+			if (tag == "weekly") {
+				if (suiviWeekly[year][weekNumber] === undefined) {
+					suiviWeekly[year][weekNumber] = [page];
+				} else {
+					suiviWeekly[year][weekNumber].push(page);
+				}
+				continue;
+			} else if (tag === "monthly") {
+				if (suiviMonthly[year][month] === undefined) {
+					suiviMonthly[year][month] = [page];
+				} else {
+					suiviMonthly[year][month].push(page);
+				}
+				continue;
+			} else if (tag === "yearly") {
+				if (suiviYearly[year] === undefined) {
+					suiviYearly[year] = [page];
+				} else {
+					suiviYearly[year].push(page);
+				}
+				continue;
+			}
+
+			if (bins[year][weekNumber][tag] === undefined) {
+				bins[year][weekNumber][tag] = [page];
+			} else {
+				bins[year][weekNumber][tag].push(page);
+			}
+		}
+
+		{
+			const years = Object.keys(bins);
+			let lastYear = 9999;
+			let lastMonth = 13;
+			years.sort().reverse();
+
+			for (const year of years) {
+				rs.push(["header", 2, year]);
+
+				if (parseInt(year, 10) < lastYear) {
+					lastMonth = 13;
+					lastYear = parseInt(year, 10);
+					if (suiviYearly[year] !== undefined) {
+						for (const page of suiviYearly[year]) {
+							const fm = new FrontmatterJS(page);
+							rs.push([
+								"paragraph",
+								Renderer.makeLinkAlias(this.dv, fm.f),
+							]);
+						}
+					}
+				}
+
+				for (let week = 52; week > 0; week--) {
+					const thisMonth = this.getMonth(year, week);
+
+					if (suiviMonthly[year][thisMonth] !== undefined) {
+						if (lastMonth !== thisMonth) {
+							lastMonth = thisMonth;
+							rs.push([
+								"header",
+								3,
+								this.getMonthName(lastMonth),
+							]);
+
+							if (suiviMonthly[year][thisMonth] !== undefined) {
+								for (const page of suiviMonthly[year][
+									thisMonth
+								]) {
+									const fm = new FrontmatterJS(page);
+									rs.push([
+										"paragraph",
+										Renderer.makeLinkAlias(this.dv, fm.f),
+									]);
+								}
+							}
+						}
+					}
+
+					if (
+						suiviWeekly[year][week] === undefined &&
+						bins[year][week] === undefined
+					) {
+						continue;
+					}
+
+					rs.push(["header", 4, `week ${week.toString()}`]);
+					if (suiviWeekly[year][week] !== undefined) {
+						for (const page of suiviWeekly[year][week]) {
+							const fm = new FrontmatterJS(page);
+							rs.push([
+								"paragraph",
+								Renderer.makeLinkAlias(this.dv, fm.f),
+							]);
+						}
+					}
+
+					if (bins[year][week] === undefined) {
+						continue;
+					}
+
+					// domain > project
+					const tags = Object.keys(bins[year][week]);
+					tags.sort();
+
+					for (const tag of tags) {
+						rs.push(["header", 5, tag]);
+						bins[year][week][tag].sort((a, b) => {
+							const fmA = new FrontmatterJS(a);
+							const fmB = new FrontmatterJS(b);
+							return (
+								fmB.createdAt.getTime() -
+								fmA.createdAt.getTime()
+							);
+						});
+
+						for (const page of bins[year][week][tag]) {
+							const fm = new FrontmatterJS(page);
+							if (fm.type === 6) {
+							} else {
+								const d = fm.createdAt
+									.toISOString()
+									.slice(0, 10);
+								const day = [
+									"Sun",
+									"Mon",
+									"Tue",
+									"Wed",
+									"Thu",
+									"Fri",
+									"Sat",
+								][fm.createdAt.getDay()];
+								const text = `${d}, ${day}`;
+								rs.push([
+									"paragraph",
+									Renderer.makeLink(this.dv, fm.f, text),
+								]);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return rs;
 	}
 
 	journal() {

@@ -6,7 +6,7 @@ import {
 	Workspace,
 	// @ts-ignore
 	HTMLElement,
-	MarkdownView,
+	addIcon,
 } from "obsidian";
 // @ts-ignore
 import {
@@ -22,6 +22,8 @@ import {
 	// @ts-ignore
 	FrontmatterJS,
 	DvLib,
+	// @ts-ignore
+	Generator,
 } from "./api";
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
@@ -73,6 +75,7 @@ export default class MyPlugin extends Plugin {
 	api: any;
 	listMaker: ListMaker;
 	frontmatter: Frontmatter;
+	generate: Generator;
 
 	printCoucou() {
 		console.log("Couou, tu veux voir ma bite?");
@@ -216,9 +219,9 @@ export default class MyPlugin extends Plugin {
 				const createdAt = new Date(fm.created_at);
 				// text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
 				if (fm.alias !== undefined) {
-				text = `(J) ${fm.alias}`;
+					text = `(J) ${fm.alias}`;
 				} else {
-				text = `(J) ${dayShort[createdAt.getDay()]}. ${createdAt.getDate()} ${monthShort[createdAt.getMonth()]}`;
+					text = `(J) ${dayShort[createdAt.getDay()]}. ${createdAt.getDate()} ${monthShort[createdAt.getMonth()]}`;
 				}
 			} else if (fm.type === 12) {
 				if (fm.name !== undefined && fm.name !== "") {
@@ -242,13 +245,14 @@ export default class MyPlugin extends Plugin {
 	async onload() {
 		console.log("gonext - onload()");
 		await this.loadSettings();
-		this.metadataCache = app.metadataCache;
-		this.workspace = app.workspace;
+		this.metadataCache = this.app.metadataCache;
+		this.workspace = this.app.workspace;
 		// @ts-ignore
-		this.dv = app.plugins.plugins.dataview.api;
+		this.dv = this.app.plugins.plugins.dataview.api;
 		// @ts-ignore
 		this.frontmatter = new Frontmatter(this);
 		this.listMaker = new ListMaker(this, this.dv, this.frontmatter);
+		this.generate = new Generator(this.app);
 
 		this.api = {
 			getArea: Helper.getArea,
@@ -277,6 +281,17 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			app: this.app,
 		};
+		addIcon(
+
+			"GoNextIcon",
+		`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="currentColor" d="M20 12V2h2v10zm4 0V2h2v10zm4 0V2h2v10zm-12 8a3.912 3.912 0 0 1-4-4a3.912 3.912 0 0 1 4-4v-2a6 6 0 1 0 6 6h-2a3.912 3.912 0 0 1-4 4"></path><path fill="currentColor" d="M28.893 18.454L26.098 16l-1.318 1.504l2.792 2.452l-2.36 4.088l-3.427-1.16a9.032 9.032 0 0 1-2.714 1.565L18.36 28h-4.72l-.71-3.55a9.095 9.095 0 0 1-2.695-1.572l-3.447 1.166l-2.36-4.088l2.725-2.395a8.926 8.926 0 0 1-.007-3.128l-2.718-2.39l2.36-4.087l3.427 1.16A9.03 9.03 0 0 1 12.93 7.55L13.64 4H16V2h-2.36a2 2 0 0 0-1.961 1.608l-.504 2.519a10.967 10.967 0 0 0-1.327.753l-2.42-.819a1.998 1.998 0 0 0-2.372.895l-2.36 4.088a2 2 0 0 0 .411 2.502l1.931 1.697C5.021 15.495 5 15.745 5 16c0 .258.01.513.028.766l-1.92 1.688a2 2 0 0 0-.413 2.502l2.36 4.088a1.998 1.998 0 0 0 2.374.895l2.434-.824a10.974 10.974 0 0 0 1.312.759l.503 2.518A2 2 0 0 0 13.64 30h4.72a2 2 0 0 0 1.961-1.608l.504-2.519a10.967 10.967 0 0 0 1.327-.753l2.419.818a1.998 1.998 0 0 0 2.373-.894l2.36-4.088a2 2 0 0 0-.411-2.502"></path></svg>`,
+		);
+			
+		
+
+		this.addRibbonIcon("GoNextIcon", "[g]o[n]ext", async () => {
+			this.generate.fleeting();
+		});
 
 		this.app.workspace.on("active-leaf-change", () => {
 			return this.sneakyTabRenamer(this.app);
@@ -389,37 +404,46 @@ export default class MyPlugin extends Plugin {
 			name: "Generate fleeting note",
 			// @ts-ignore
 			callback: () => {
-				const dt = new Date();
-				const note = {
-					uuid: uuidv4(),
-					type: 13,
-					version: "0.0.4",
-					created_at: dt.toISOString(),
-					path: "",
-					data: "",
-				};
-
-				note.path = `800 Inbox/${note.uuid}.md`;
-				note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
-
-				const f = this.app.vault
-					.create(note.path, note.data)
-					.then((f) => {
-						return f;
-					});
-				const active = this.app.workspace.activeLeaf;
-				// @ts-ignore
-				const root = active.parent;
-				this.app.workspace.createLeafInParent(
-					root,
-					root.children.length + 1,
-				);
-				const leaf = root.children[root.children.length - 1];
-				f.then((file) => {
-					leaf.openFile(file, { active: true });
-				});
+				this.generate.fleeting();
 			},
 		});
+
+		// this.addCommand({
+		// 	id: "gonext-generate-fleeting",
+		// 	name: "Generate fleeting note",
+		// 	// @ts-ignore
+		// 	callback: () => {
+		// 		const dt = new Date();
+		// 		const note = {
+		// 			uuid: uuidv4(),
+		// 			type: 13,
+		// 			version: "0.0.4",
+		// 			created_at: dt.toISOString(),
+		// 			path: "",
+		// 			data: "",
+		// 		};
+		//
+		// 		note.path = `800 Inbox/${note.uuid}.md`;
+		// 		note.data = `---\ntype: 13\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\n---\n## Content\n`;
+		//
+		// 		const f = this.app.vault
+		// 			.create(note.path, note.data)
+		// 			.then((f) => {
+		// 				return f;
+		// 			});
+		// 		const active = this.app.workspace.activeLeaf;
+		// 		// @ts-ignore
+		// 		const root = active.parent;
+		// 		this.app.workspace.createLeafInParent(
+		// 			root,
+		// 			root.children.length + 1,
+		// 		);
+		// 		const leaf = root.children[root.children.length - 1];
+		// 		f.then((file) => {
+		// 			leaf.openFile(file, { active: true });
+		// 		});
+		// 	},
+		// });
 
 		this.addCommand({
 			id: "safe-delete",
