@@ -8,6 +8,7 @@ import {
 	HTMLElement,
 	addIcon,
 	CachedMetadata,
+	TFile,
 } from "obsidian";
 // @ts-ignore
 import {
@@ -75,6 +76,7 @@ export default class MyPlugin extends Plugin {
 	frontmatter: Frontmatter;
 	generate: Generator;
 	notify: any;
+	vaultContent: TFile[] = [];
 
 	printCoucou() {
 		console.log("Couou, tu veux voir ma bite?");
@@ -286,7 +288,7 @@ export default class MyPlugin extends Plugin {
 		this.frontmatter = new Frontmatter(this);
 		this.listMaker = new ListMaker(this, this.dv, this.frontmatter);
 		this.generate = new Generator(this.app);
-		this.vaultContent = this.app.vault.getFiles();
+		this.files = {};
 
 		this.api = {
 			getArea: Helper.getArea,
@@ -507,51 +509,78 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
-		this.loadIndex();
+		// hook pour mettre à jour les alias
+		this.app.metadataCache.on(
+			"changed",
+			(file: TFile, data: string, cache: CachedMetadata) => {
+				console.log("metadataCache - changed");
+				const fm = cache.frontmatter;
+				if (fm.type === 2) {
+					if (this.files[fm.uuid] !== undefined) {
+						const [path, note] = this.files[fm.uuid];
+						fm.alias = [path.join(" / ")];
+					}
+				}
+			},
+		);
+
+		this.app.workspace.onLayoutReady(() => {
+			console.log("workspace - layout-ready");
+			// il semblerait que l'actuel probleme est que la fonction getFiles ne retourne pas tous les fichiers du vault, mais seulement ceux qui sont chargés
+			if (this.vaultContent.length === 0) {
+				this.vaultContent = this.app.vault.getFiles();
+			}
+
+			this.loadIndex();
+		});
 	}
 
-	loadIndex() {
-		console.log("gonext - loadIndex()");
+	getIndexDomains() {
 		const indexPath = this.app.vault.getAbstractFileByPath("Index.md");
 		const index = this.app.metadataCache.getFileCache(indexPath);
 		const domains = [];
 
-		{
-			let start = undefined;
-			let end = undefined;
-			let found = false;
+		let start = undefined;
+		let end = undefined;
+		let found = false;
 
-			// recherche du top level heading `## domains`
-			for (const heading of index.headings) {
-				if (heading.level === 2 && found) {
-					end = heading.position.start.offset;
-					break;
-				} else if (
-					heading.level === 2 &&
-					heading.heading === "domains"
-				) {
-					start = heading.position.end.offset;
-					found = true;
-				}
-			}
-
-			// recherche des liens qui sont contenus dans les bornes du top level heading `## domains`
-			for (const link of index.links) {
-				const pos = link.position;
-				if (pos.start.offset < start || pos.end.offset > end) {
-					continue;
-				}
-
-				const indexContent = this.getFileCacheFromUUID(link.link);
-				if (indexContent.headings.length < 2) {
-					console.error(`Invalid Index: ${link.link}`);
-					continue;
-				}
-
-				domains.push(indexContent);
+		// recherche du top level heading `## domains`
+		for (const heading of index.headings) {
+			if (heading.level === 2 && found) {
+				end = heading.position.start.offset;
+				break;
+			} else if (heading.level === 2 && heading.heading === "domains") {
+				start = heading.position.end.offset;
+				found = true;
 			}
 		}
 
+		// recherche des liens qui sont contenus dans les bornes du top level heading `## domains`
+		for (const link of index.links) {
+			const pos = link.position;
+			if (pos.start.offset < start || pos.end.offset > end) {
+				continue;
+			}
+
+			const indexContent = this.getFileCacheFromUUID(link.link);
+			if (indexContent === undefined) {
+				continue;
+			}
+
+			if (indexContent.headings.length < 2) {
+				console.error(`Invalid Index: ${link.link}`);
+				continue;
+			}
+
+			domains.push(indexContent);
+		}
+
+		return domains;
+	}
+
+	loadIndex() {
+		console.log("gonext - loadIndex()");
+		const domains = this.getIndexDomains();
 		// recherche dans les index des domains respectifs s'il y a présence d'une entry `### patterns`
 		// -> components
 		const components = {};
@@ -607,8 +636,12 @@ export default class MyPlugin extends Plugin {
 		const q = [];
 		const results = [];
 
-		for (const pattern of components["zzz"]["patterns"]) {
-			q.push([["zzz", "patterns"], pattern]);
+		if (components["health"]["patterns"] === undefined) {
+			return;
+		}
+
+		for (const pattern of components["health"]["patterns"]) {
+			q.push([["health", "patterns"], pattern]);
 		}
 
 		// les links doivent etre in bound dans `### name`
@@ -624,21 +657,29 @@ export default class MyPlugin extends Plugin {
 				// on append aux results
 				// domain name / patterns / pattern name a / pattern name b / sequence name -> uuid | file cache | file path
 				results.push([[...path, note.headings[1].heading], note]);
-
 			} else {
 				const nameHeading = note.headings[1];
 				const start = nameHeading.position.end.offset;
 				let stop = 0;
 				if (note.headings[2] === undefined) {
 					stop =
-						note.sections[note.sections.length - 1].position.end.offset;
+						note.sections[note.sections.length - 1].position.end
+							.offset;
 				} else {
 					stop = note.headings[2].position.start.offset;
 				}
 				///
+				if (note.links === undefined) {
+					continue;
+				}
+
+				//
 				for (const link of note.links) {
 					// link in bound nameHeading
-					if (link.position.start.offset < start || link.position.end.offset > stop) {
+					if (
+						link.position.start.offset < start ||
+						link.position.end.offset > stop
+					) {
 						continue;
 					}
 
@@ -649,10 +690,13 @@ export default class MyPlugin extends Plugin {
 				}
 			}
 		}
-		// console.log(results);
+
 		for (const [path, note] of results) {
-			console.log(path);
-			// console.log(note)
+			const fm = note.frontmatter;
+			this.files[fm.uuid] = [path, note];
+			if (fm.type === 2) {
+				fm.alias = [path.join(" / ")];
+			}
 		}
 	}
 
