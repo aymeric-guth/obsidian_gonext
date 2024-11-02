@@ -10,6 +10,27 @@ import {
 } from "./constants";
 import { v4 as uuidv4 } from "uuid";
 
+export async function notify(msg: string) {
+	const PUSHOVER_URI = "api.pushover.net";
+	const d = await app.vault.readJson(".pushover.json");
+	const data = new URLSearchParams({
+		message: msg,
+		token: d.pushover_token,
+		user: d.pushover_user,
+	});
+	console.log(data.toString());
+
+	await fetch(`https://${PUSHOVER_URI}/1/messages.json`, {
+		method: "POST",
+		// mode: 'no-cors',
+		cache: "no-cache",
+		headers: {
+			"Content-type": "application/x-www-form-urlencoded",
+		},
+		body: data,
+	});
+}
+
 class FilterBy {
 	public fm: any;
 	public predicates: string[];
@@ -3297,21 +3318,21 @@ export class ListMaker {
 		}
 		let comp = undefined;
 		switch (current.op) {
-			case '>':
-				comp = (a, b) => a > b
-			break;
-			case '>=':
-				comp = (a, b) => a >= b
-			break;
-			case '<':
-				comp = (a, b) => a < b
-			break;
-			case '<=':
-				comp = (a, b) => a <= b
-			break;
+			case ">":
+				comp = (a, b) => a > b;
+				break;
+			case ">=":
+				comp = (a, b) => a >= b;
+				break;
+			case "<":
+				comp = (a, b) => a < b;
+				break;
+			case "<=":
+				comp = (a, b) => a <= b;
+				break;
 			default:
-				comp = (a, b) => a === b
-			break;
+				comp = (a, b) => a === b;
+				break;
 		}
 
 		const rs = [];
@@ -3327,14 +3348,19 @@ export class ListMaker {
 
 			return comp(fm.energy, current.energy);
 		});
-		
 
-		rs.push(["array", (dv, data) => {
-			for (const entry of data) {
-				console.log(entry)
-				dv.paragraph(Renderer.makeLinkAlias(dv, entry.file, "## Task"));
-			}
-		}, pages]);
+		rs.push([
+			"array",
+			(dv, data) => {
+				for (const entry of data) {
+					console.log(entry);
+					dv.paragraph(
+						Renderer.makeLinkAlias(dv, entry.file, "## Task"),
+					);
+				}
+			},
+			pages,
+		]);
 
 		return rs;
 	}

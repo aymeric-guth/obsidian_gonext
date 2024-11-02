@@ -24,6 +24,8 @@ import {
 	DvLib,
 	// @ts-ignore
 	Generator,
+	// @ts-ignore
+	notify,
 } from "./api";
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
@@ -76,6 +78,7 @@ export default class MyPlugin extends Plugin {
 	listMaker: ListMaker;
 	frontmatter: Frontmatter;
 	generate: Generator;
+	notify: any;
 
 	printCoucou() {
 		console.log("Couou, tu veux voir ma bite?");
@@ -272,6 +275,7 @@ export default class MyPlugin extends Plugin {
 			renderer: Renderer,
 			autoField: AutoField,
 			dvLib: new DvLib(),
+			notify: notify,
 		};
 
 		// @ts-ignore
