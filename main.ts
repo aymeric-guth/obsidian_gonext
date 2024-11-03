@@ -794,7 +794,7 @@ export default class MyPlugin extends Plugin {
       // link in bound nameHeading
       if (
         link.position.start.offset < start ||
-        link.position.end.offset > stop
+        link.position.end.offset > end 
       ) {
         continue;
       }
