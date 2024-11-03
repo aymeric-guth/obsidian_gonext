@@ -365,6 +365,37 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "goto-active-task-logs",
+			name: "Goto Active Tasks Logs'",
+			// @ts-ignore
+			callback: () => {
+				// @ts-ignore
+				const pages = this.dv
+					.pages(`"${Paths.Tasks}"`)
+					.where((page) => {
+						if (page.file.frontmatter.status === "doing") {
+							return true;
+						}
+
+						return false;
+					});
+
+				if (pages.length === 0) {
+					return;
+				}
+
+				const tFm = new FrontmatterJS(pages[0]);
+				const logs = this.dv.pages(`"${Paths.Logs}/${tFm.uuid}"`).sort((k) => k.created_at, "desc");
+				console.log(logs)
+				if (logs.length === 0) {
+					return;
+				}
+
+				this.openInNewTabIfNotOpened(logs[0]);
+			}
+		});
+
+		this.addCommand({
 			id: "goto-children",
 			name: "Goto Child",
 			// @ts-ignore
