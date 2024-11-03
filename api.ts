@@ -2247,6 +2247,25 @@ export class Generator {
 			leaf.openFile(file, { active: true });
 		});
 	}
+
+	journalEntry() {
+		const dt = new Date();
+		const note = {
+			uuid: uuidv4(),
+			type: 20,
+			version: "0.0.4",
+			created_at: dt.toISOString(),
+			path: "",
+			data: "",
+		};
+
+		note.path = `Journal/${note.uuid}.md`;
+		note.data = `---\ntype: 20\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\ntags:\n    - project/mission\n---\n## Content\n### entry\n`;
+
+		return this.app.vault.create(note.path, note.data).then((f) => {
+			return f;
+		});
+	}
 }
 
 export class ListMaker {

@@ -39,6 +39,7 @@ import { Paths, Status, Types, Namespace, Default } from "./constants";
 // const { randomUUID } = require("crypto");
 import { v4 as uuidv4 } from "uuid";
 import { continuedIndent } from "@codemirror/language";
+import { throws } from "assert";
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -198,6 +199,8 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 	}
+
+	generateJournalEntry() { }
 
 	sneakyTabRenamer(app) {
 		// @ts-ignore
@@ -362,6 +365,100 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "goto-children",
+			name: "Goto Child",
+			// @ts-ignore
+			callback: () => {
+				const file = this.getFileFromLeaf(
+					this.app.workspace.activeLeaf,
+				);
+				if (file === undefined) {
+					console.error("goto-child: File is undefined");
+					return;
+				}
+
+				const cache = this.getFileCacheFromLeaf(
+					this.app.workspace.activeLeaf,
+				);
+				const fm = cache.frontmatter;
+				if (fm === undefined) {
+					console.error("goto-child: Invalid FrontMatter");
+					return;
+				}
+
+				const active = this.app.workspace.activeLeaf;
+				const dir = file.path.split("/")[0];
+
+				if (dir === Paths.Tasks) {
+					const page = { file: { frontmatter: fm, path: file.path } };
+					const curFm = new FrontmatterJS(page);
+					const curAt = curFm.at.toISOString().slice(0, 10);
+
+					if (curFm.getProject() === "daily") {
+						const pages = this.dv
+							.pages(`"${Paths.Journal}"`)
+							.where((page) => {
+								const jFm = new FrontmatterJS(page);
+								if (jFm.getProject() !== "mission") {
+									return false;
+								}
+
+								const jAt = jFm.createdAt
+									.toISOString()
+									.slice(0, 10);
+								if (curAt !== jAt) {
+									return false;
+								}
+
+								return true;
+							});
+
+						if (pages.length === 0) {
+							// create journal page
+							const note = this.generate.journalEntry();
+							note.then((file) => {
+								active.openFile(file, { active: true });
+							});
+							return;
+						} else {
+							const children =
+								this.app.vault.getAbstractFileByPath(
+									pages[0].file.path,
+								);
+							Assert.True(
+								!Helper.nilCheck(children),
+								`goto-children: Unexpected undefined file: ${pages[0].file.path}`,
+							);
+							active.openFile(children);
+							return;
+						}
+					} else {
+						const pages = this.dv
+							.pages(`"${Paths.Logs}/${curFm.uuid}"`)
+							.sort((k) => k.created_at, "desc");
+						if (pages.length === 0) {
+							return;
+						}
+
+						const children = this.app.vault.getAbstractFileByPath(
+							pages[0].file.path,
+						);
+						Assert.True(
+							!Helper.nilCheck(children),
+							`goto-children: Unexpected undefined file: ${pages[0].file.path}`,
+						);
+						active.openFile(children);
+					}
+				} else {
+					console.error(
+						"goto-children: Not Implemented outside Journal, Tasks",
+					);
+					return;
+				}
+			},
+		});
+
+		this.addCommand({
 			id: "goto-parent",
 			name: "Goto Parent",
 			// @ts-ignore
@@ -383,23 +480,118 @@ export default class MyPlugin extends Plugin {
 					return;
 				}
 
-				const dir = file.path.split("/")[0];
-				if (dir !== Paths.Slipbox) {
-					console.error("goto-parent: Not Implemented outside Index");
-					return;
-				}
-
-				// @ts-ignore
-				// console.log(file);
-				const parent = this.findFirstParentInDomains(file, cache);
 				const active = this.app.workspace.activeLeaf;
+				const dir = file.path.split("/")[0];
 
-				if (parent !== undefined) {
-					const file = this.getFileFromUUID(parent.frontmatter.uuid);
-					active.openFile(file);
-					// this.openInNewTabIfNotOpened(page);
+				if (dir === Paths.Slipbox) {
+					// @ts-ignore
+					const parent = this.findFirstParentInDomains(file, cache);
+					if (parent !== undefined) {
+						const file = this.getFileFromUUID(
+							parent.frontmatter.uuid,
+						);
+						active.openFile(file);
+						// this.openInNewTabIfNotOpened(page);
+					} else {
+						active.openFile(
+							this.app.vault.getAbstractFileByPath("Index.md"),
+						);
+					}
+				} else if (dir === Paths.Logs) {
+					const taskId = file.path.split("/")[1];
+					Assert.True(
+						taskId !== undefined,
+						`Invalid logDir: ${file.path}`,
+					);
+					const task = this.app.vault.getAbstractFileByPath(
+						`${Paths.Tasks}/${fm.parent_id}.md`,
+					);
+					if (Helper.nilCheck(task)) {
+						console.error(`Undefined Task: ${taskId}`);
+					} else {
+						active.openFile(task);
+					}
+				} else if (dir === Paths.Tasks) {
+					const page = { file: { frontmatter: fm, path: file.path } };
+					const curFm = new FrontmatterJS(page);
+					const curAt = curFm.at.toISOString().slice(0, 10);
+					if (curFm.getProject() === "daily") {
+						const pages = this.dv
+							.pages(`"${Paths.Journal}"`)
+							.where((page) => {
+								const jFm = new FrontmatterJS(page);
+								if (jFm.getProject() !== "mission") {
+									return false;
+								}
+
+								const jAt = jFm.at.toISOString().slice(0, 10);
+								if (curAt !== jAt) {
+									return false;
+								}
+
+								return true;
+							});
+						if (pages.length === 0) {
+							// create journal page
+							console.log("Must create journal entry first");
+							return;
+						} else {
+							throw new Error("Not Implemented");
+						}
+					} else {
+						console.error(
+							"goto-parent: Not Implemented for non-daily Task",
+						);
+						return;
+					}
+				} else if (dir === Paths.Journal) {
+					const page = { file: { frontmatter: fm, path: file.path } };
+					const curFm = new FrontmatterJS(page);
+					const curAt = curFm.createdAt.toISOString().slice(0, 10);
+					if (curFm.getProject() === "mission") {
+						const pages = this.dv
+							.pages(`"${Paths.Tasks}"`)
+							.where((page) => {
+								if (page.file.frontmatter.at === undefined) {
+									return false;
+								}
+
+								const tFm = new FrontmatterJS(page);
+								if (tFm.getProject() !== "daily") {
+									return false;
+								}
+
+								const tAt = tFm.at.toISOString().slice(0, 10);
+								if (curAt !== tAt) {
+									return false;
+								}
+
+								return true;
+							});
+
+						Assert.True(
+							pages.length === 1,
+							`Non existant or non unique Task: ${pages.file.frontmatter.uuid}`,
+						);
+						const f = this.app.vault.getAbstractFileByPath(
+							pages[0].file.path,
+						);
+						Assert.True(
+							!Helper.nilCheck(f),
+							`Unexpected non-existant Task: ${pages[0].file.path}`,
+						);
+						active.openFile(f);
+					} else {
+						console.error(
+							"goto-parent: Not Implemented for non-mission Journal Entry",
+						);
+						return;
+					}
 				} else {
-					active.openFile(this.app.vault.getAbstractFileByPath("Index.md"));
+					console.error(
+						"goto-parent: Not Implemented outside Index, Logs",
+					);
+					return;
 				}
 			},
 		});
@@ -960,7 +1152,7 @@ export default class MyPlugin extends Plugin {
 		// const components = this.getDomainComponents(domains);
 		const q = [];
 		for (const domain of domains) {
-			console.log(domain)
+			console.log(domain);
 			q.push(domain);
 		}
 
@@ -970,7 +1162,7 @@ export default class MyPlugin extends Plugin {
 				// special case for Index
 				return undefined;
 				return app.metadataCache.getFileCache(
-					this.app.vault.getAbstractFileByPath("Index.md")
+					this.app.vault.getAbstractFileByPath("Index.md"),
 				);
 			}
 
