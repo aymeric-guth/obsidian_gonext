@@ -734,7 +734,6 @@ export default class MyPlugin extends Plugin {
 				domain,
 				"patterns",
 			);
-			//
 			console.log(results)
 			if (results === undefined) {
 				continue;
