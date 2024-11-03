@@ -513,7 +513,7 @@ export default class MyPlugin extends Plugin {
 		this.app.metadataCache.on(
 			"changed",
 			(file: TFile, data: string, cache: CachedMetadata) => {
-				console.log("metadataCache - changed");
+				// console.log("metadataCache - changed");
 				const fm = cache.frontmatter;
 				if (fm.type === 2) {
 					if (this.files[fm.uuid] !== undefined) {
@@ -578,42 +578,65 @@ export default class MyPlugin extends Plugin {
 		return domains;
 	}
 
-	loadIndex() {
-		console.log("gonext - loadIndex()");
-		const domains = this.getIndexDomains();
+	getDomainComponents(domains) {
 		// recherche dans les index des domains respectifs s'il y a présence d'une entry `### patterns`
 		// -> components
 		const components = {};
 		for (const domain of domains) {
 			const name = domain.headings[1].heading;
+			const start = domain.headings[1].position.end.offset;
+			let end = 0;
+			if (domain.headings[2] !== undefined) {
+				end = domain.headings[2].position.start.offset;
+			} else {
+				end =
+					domain.sections[domain.sections.length - 1].position.end
+						.offset;
+			}
+
 			for (const component of domain.links) {
-				if (component.displayText === "patterns") {
-					if (components[name] === undefined) {
-						components[name] = {};
-					}
+				if (
+					component.position.start.offset < start ||
+					component.position.end.offset > end
+				) {
+					continue;
+				}
 
-					const patternsContent = this.getFileCacheFromUUID(
-						this.extractUUIDFromLink(component.link),
+				if (components[name] === undefined) {
+					components[name] = {};
+				}
+
+				const cache = this.getFileCacheFromUUID(
+					this.extractUUIDFromLink(component.link),
+				);
+
+				const componentName = component.displayText;
+				if (!["patterns", "concepts", "guidelines", "procedures", "material"].contains(componentName)) {
+					continue;
+				}
+
+				if (components[name][componentName] === undefined) {
+					components[name][componentName] = [];
+				}
+
+				if (cache.links === undefined || cache.links.length === 0) {
+					continue;
+				}
+
+				for (const link of cache.links) {
+					components[name][componentName].push(
+						this.getFileCacheFromUUID(
+							this.extractUUIDFromLink(link.link),
+						),
 					);
-					if (patternsContent.links.length === 0) {
-						continue;
-					}
-
-					if (components[name]["patterns"] === undefined) {
-						components[name]["patterns"] = [];
-					}
-
-					for (const link of patternsContent.links) {
-						components[name]["patterns"].push(
-							this.getFileCacheFromUUID(
-								this.extractUUIDFromLink(link.link),
-							),
-						);
-					}
 				}
 			}
 		}
 
+		return components;
+	}
+
+	parseComponentTree(components, domainName, componentName) {
 		// a ce point on a le root de l'arbre de chaque domain
 		// reste maintenant à
 		// parser chaque fiche pattern
@@ -636,12 +659,12 @@ export default class MyPlugin extends Plugin {
 		const q = [];
 		const results = [];
 
-		if (components["health"]["patterns"] === undefined) {
+		if (components[domainName][componentName] === undefined) {
 			return;
 		}
 
-		for (const pattern of components["health"]["patterns"]) {
-			q.push([["health", "patterns"], pattern]);
+		for (const pattern of components[domainName][componentName]) {
+			q.push([[domainName, componentName], pattern]);
 		}
 
 		// les links doivent etre in bound dans `### name`
@@ -683,6 +706,11 @@ export default class MyPlugin extends Plugin {
 						continue;
 					}
 
+					// console.log(link.link.slice(link.link.length-3, link.link.length))
+					if (!Helper.isUUID(link.link.slice(0, 36))) {
+						continue;
+					}
+
 					const f = this.getFileCacheFromUUID(
 						this.extractUUIDFromLink(link.link),
 					);
@@ -691,11 +719,33 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		for (const [path, note] of results) {
-			const fm = note.frontmatter;
-			this.files[fm.uuid] = [path, note];
-			if (fm.type === 2) {
-				fm.alias = [path.join(" / ")];
+		return results;
+	}
+
+	loadIndex() {
+		console.log("gonext - loadIndex()");
+		const domains = this.getIndexDomains();
+		const components = this.getDomainComponents(domains);
+
+		for (const domain of Object.keys(components)) {
+			console.log(domain)
+			const results = this.parseComponentTree(
+				components,
+				domain,
+				"patterns",
+			);
+			//
+			console.log(results)
+			if (results === undefined) {
+				continue;
+			}
+
+			for (const [path, note] of results) {
+				const fm = note.frontmatter;
+				this.files[fm.uuid] = [path, note];
+				if (fm.type === 2) {
+					fm.alias = [path.join(" / ")];
+				}
 			}
 		}
 	}
