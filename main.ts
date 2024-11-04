@@ -177,10 +177,18 @@ export default class MyPlugin extends Plugin {
 				continue;
 			}
 
-			const path = f.path.split("/");
-			if (path[path.length - 1].slice(0, -3) === _id) {
+			if (f.basename.length !== 36) {
+				continue;
+			}
+
+			if (f.basename === _id) {
 				return this.app.vault.getAbstractFileByPath(f.path);
 			}
+
+			// const path = f.path.split("/");
+			// if (path[path.length - 1].slice(0, -3) === _id) {
+			// 	return this.app.vault.getAbstractFileByPath(f.path);
+			// }
 		}
 	}
 
