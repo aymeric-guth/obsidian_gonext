@@ -3657,7 +3657,7 @@ export class ListMaker {
 			];
 			msg += `day: ${day}\n`;
 
-			console.log(msg);
+			// console.log(msg);
 
 			if (bins[year] === undefined) {
 				bins[year] = {};

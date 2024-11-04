@@ -83,7 +83,6 @@ export default class MyPlugin extends Plugin {
 	vaultContent: TFile[] = [];
 
 	openInNewTabIfNotOpened(page) {
-		console.log(page);
 		const active = this.app.workspace.activeLeaf;
 		// @ts-ignore
 		const root = active.parent;
@@ -386,7 +385,6 @@ export default class MyPlugin extends Plugin {
 
 				const tFm = new FrontmatterJS(pages[0]);
 				const logs = this.dv.pages(`"${Paths.Logs}/${tFm.uuid}"`).sort((k) => k.created_at, "desc");
-				console.log(logs)
 				if (logs.length === 0) {
 					return;
 				}
@@ -404,7 +402,7 @@ export default class MyPlugin extends Plugin {
 					this.app.workspace.activeLeaf,
 				);
 				if (file === undefined) {
-					console.error("goto-child: File is undefined");
+					console.error("goto-children: File is undefined");
 					return;
 				}
 
@@ -413,7 +411,7 @@ export default class MyPlugin extends Plugin {
 				);
 				const fm = cache.frontmatter;
 				if (fm === undefined) {
-					console.error("goto-child: Invalid FrontMatter");
+					console.error("goto-children: Invalid FrontMatter");
 					return;
 				}
 
@@ -494,6 +492,7 @@ export default class MyPlugin extends Plugin {
 			name: "Goto Parent",
 			// @ts-ignore
 			callback: () => {
+				console.log("goto-parent:")
 				const file = this.getFileFromLeaf(
 					this.app.workspace.activeLeaf,
 				);
@@ -1180,10 +1179,8 @@ export default class MyPlugin extends Plugin {
 
 	findFirstParentInDomains(file: TAbstractFile, resource: CachedMetadata) {
 		const domains = this.getIndexDomains();
-		// const components = this.getDomainComponents(domains);
 		const q = [];
 		for (const domain of domains) {
-			console.log(domain);
 			q.push(domain);
 		}
 
@@ -1191,17 +1188,27 @@ export default class MyPlugin extends Plugin {
 			const cur = q.pop();
 			if (cur === undefined) {
 				// special case for Index
+				continue;
 				return undefined;
-				return app.metadataCache.getFileCache(
-					this.app.vault.getAbstractFileByPath("Index.md"),
-				);
 			}
 
 			if (cur.links === undefined || cur.links.length === 0) {
 				continue;
 			}
 
-			// console.log(cur)
+			if (cur.frontmatter === undefined) {
+				continue;
+			}
+
+			const f = this.getFileFromUUID(cur.frontmatter.uuid);
+			if (f === undefined) {
+				continue;
+			}
+
+			if (f.parent.name !== Paths.Slipbox) {
+				continue;
+			}
+
 			const [start, end] = this.getContentBoundaries(cur);
 			for (const link of cur.links) {
 				if (link.link.length !== 36) {
@@ -1221,6 +1228,8 @@ export default class MyPlugin extends Plugin {
 				}
 			}
 		}
+
+		return undefined;
 	}
 
 	isSequence(note: CachedMetadata): boolean {
