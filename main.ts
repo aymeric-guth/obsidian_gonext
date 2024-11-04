@@ -81,6 +81,7 @@ export default class MyPlugin extends Plugin {
 	generate: Generator;
 	notify: any;
 	vaultContent: TFile[] = [];
+	vaultContentDict: {[ id: string]: TFile} = {};
 
 	openInNewTabIfNotOpened(page) {
 		const active = this.app.workspace.activeLeaf;
@@ -172,39 +173,16 @@ export default class MyPlugin extends Plugin {
 	}
 
 	getFileFromUUID(_id: string): TAbstractFile {
-		for (const f of this.vaultContent) {
-			if (f.path.length < 36) {
-				continue;
-			}
-
-			if (f.basename.length !== 36) {
-				continue;
-			}
-
-			if (f.basename === _id) {
-				return this.app.vault.getAbstractFileByPath(f.path);
-			}
-
-			// const path = f.path.split("/");
-			// if (path[path.length - 1].slice(0, -3) === _id) {
-			// 	return this.app.vault.getAbstractFileByPath(f.path);
-			// }
-		}
+		return this.vaultContentDict[_id];
 	}
 
 	getFileCacheFromUUID(_id: string): CachedMetadata {
-		for (const f of this.vaultContent) {
-			if (f.path.length < 36) {
-				continue;
-			}
-
-			const path = f.path.split("/");
-			if (path[path.length - 1].slice(0, -3) === _id) {
-				return app.metadataCache.getFileCache(
-					this.app.vault.getAbstractFileByPath(f.path),
-				);
-			}
+		const f = this.vaultContentDict[_id];
+		if (f === undefined) {
+			return undefined;
 		}
+
+		return app.metadataCache.getFileCache(f);
 	}
 
 	generateJournalEntry() { }
@@ -823,9 +801,12 @@ export default class MyPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => {
 			console.log("workspace - layout-ready");
-			// il semblerait que l'actuel probleme est que la fonction getFiles ne retourne pas tous les fichiers du vault, mais seulement ceux qui sont chargés
-			if (this.vaultContent.length === 0) {
-				this.vaultContent = this.app.vault.getFiles();
+			for (const f of this.app.vault.getFiles()) {
+				if (!Helper.isUUID(f.basename)) {
+					continue;
+				}
+
+				this.vaultContentDict[f.basename] = f;
 			}
 
 			this.loadIndex();
