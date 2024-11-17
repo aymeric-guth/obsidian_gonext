@@ -81,7 +81,7 @@ export default class MyPlugin extends Plugin {
 	generate: Generator;
 	notify: any;
 	vaultContent: TFile[] = [];
-	vaultContentDict: {[ id: string]: TFile} = {};
+	vaultContentDict: { [id: string]: TFile } = {};
 
 	openViewInNewTabIfNotOpened(name: string) {
 		const active = this.app.workspace.activeLeaf;
@@ -106,7 +106,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		let file = undefined;
+		const file = undefined;
 		if (!found) {
 			if (emptyTabs.length > 0) {
 				node = emptyTabs[0];
@@ -214,7 +214,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	grugAlias(_id: string): string {
-		const cache = this.getFileCacheFromUUID(_id)
+		const cache = this.getFileCacheFromUUID(_id);
 		if (cache === undefined) {
 			console.error(`grugAlias: file not found in grug cache ${_id}`);
 			return "";
@@ -225,7 +225,7 @@ export default class MyPlugin extends Plugin {
 		// alias > name heading
 		let targetName = undefined;
 		const nameHeading = this.getResourceName(cache, start, end);
-		
+
 		const fm = cache.frontmatter;
 
 		if (fm.alias !== undefined) {
@@ -239,7 +239,7 @@ export default class MyPlugin extends Plugin {
 			targetName = nameHeading;
 		}
 
-		const file = this.getFileFromUUID(_id)
+		const file = this.getFileFromUUID(_id);
 		if (file === undefined) {
 			console.error(`grugAlias: Cannot grug this id: ${_id}`);
 			return "";
@@ -248,7 +248,6 @@ export default class MyPlugin extends Plugin {
 
 		return `[[${path}#${nameHeading}|${targetName}]]`;
 	}
-
 
 	getFileFromUUID(_id: string): TAbstractFile {
 		return this.vaultContentDict[_id];
@@ -504,13 +503,15 @@ export default class MyPlugin extends Plugin {
 				}
 
 				const tFm = new FrontmatterJS(pages[0]);
-				const logs = this.dv.pages(`"${Paths.Logs}/${tFm.uuid}"`).sort((k) => k.created_at, "desc");
+				const logs = this.dv
+					.pages(`"${Paths.Logs}/${tFm.uuid}"`)
+					.sort((k) => k.created_at, "desc");
 				if (logs.length === 0) {
 					return;
 				}
 
 				this.openInNewTabIfNotOpened(logs[0]);
-			}
+			},
 		});
 
 		this.addCommand({
@@ -579,6 +580,7 @@ export default class MyPlugin extends Plugin {
 								!Helper.nilCheck(children),
 								`goto-children: Unexpected undefined file: ${pages[0].file.path}`,
 							);
+							// @ts-ignore
 							active.openFile(children);
 							return;
 						}
@@ -597,6 +599,7 @@ export default class MyPlugin extends Plugin {
 							!Helper.nilCheck(children),
 							`goto-children: Unexpected undefined file: ${pages[0].file.path}`,
 						);
+						// @ts-ignore
 						active.openFile(children);
 					}
 				} else {
@@ -613,7 +616,7 @@ export default class MyPlugin extends Plugin {
 			name: "Goto Parent",
 			// @ts-ignore
 			callback: () => {
-				console.log("goto-parent:")
+				console.log("goto-parent:");
 				const file = this.getFileFromLeaf(
 					this.app.workspace.activeLeaf,
 				);
@@ -641,10 +644,13 @@ export default class MyPlugin extends Plugin {
 						const file = this.getFileFromUUID(
 							parent.frontmatter.uuid,
 						);
+						// @ts-ignore
 						active.openFile(file);
 						// this.openInNewTabIfNotOpened(page);
 					} else {
+						// @ts-ignore
 						active.openFile(
+							// @ts-ignore
 							this.app.vault.getAbstractFileByPath("Index.md"),
 						);
 					}
@@ -840,9 +846,12 @@ export default class MyPlugin extends Plugin {
 						return;
 					}
 					const file = this.getFileFromUUID(_id);
-					Assert.True(file !== undefined, `getFileFromUUID: returned undefined for uuid: ${_id}`)
+					Assert.True(
+						file !== undefined,
+						`getFileFromUUID: returned undefined for uuid: ${_id}`,
+					);
 					const rootDir = file.path.split("/")[0];
-					const authorized = [Paths.Slipbox, Paths.Refs]
+					const authorized = [Paths.Slipbox, Paths.Refs];
 					if (rootDir !== undefined && authorized.contains(rootDir)) {
 						const alias = this.grugAlias(_id);
 						// navigator.clipboard.writeText(alias).then(() => {console.log("coucou, etc etc")});
@@ -856,10 +865,11 @@ export default class MyPlugin extends Plugin {
 							editor.replaceRange(alias, cursor);
 						}
 					} else {
-						console.log(`Does not work outside slibe-box, got ${file.path}`)
+						console.log(
+							`Does not work outside slibe-box, got ${file.path}`,
+						);
 						return;
 					}
-
 				});
 			},
 		});
@@ -889,18 +899,23 @@ export default class MyPlugin extends Plugin {
 					"Planning.md",
 					"Projects.md",
 					"SOMEDAY MAYBE.md",
-					"WAITING FOR.md"
+					"WAITING FOR.md",
 				];
-				const fm = this.app.metadataCache.getFileCache(file).frontmatter;
+				const fm =
+					this.app.metadataCache.getFileCache(file).frontmatter;
 				if (safeFromHarm.contains(file.path)) {
-						console.log("Oopsie, almost did an oopsie. Got your back bro");
-						return;
+					console.log(
+						"Oopsie, almost did an oopsie. Got your back bro",
+					);
+					return;
 				}
 
 				if (fm.tags !== undefined && fm.tags.length >= 0) {
 					for (const tag of fm.tags) {
 						if (tag === "project/daily") {
-							console.log("Hey George What's up George, You cannot do that George");
+							console.log(
+								"Hey George What's up George, You cannot do that George",
+							);
 							return;
 						}
 					}
@@ -1329,7 +1344,12 @@ export default class MyPlugin extends Plugin {
 					continue;
 				}
 
-				const reserved = ["strength routine", "strength routine", "stretch routine", "stretch routine"];
+				const reserved = [
+					"strength routine",
+					"strength routine",
+					"stretch routine",
+					"stretch routine",
+				];
 				for (const [path, note] of results) {
 					const fm = note.frontmatter;
 					// @ts-ignore
@@ -1343,7 +1363,7 @@ export default class MyPlugin extends Plugin {
 						} else {
 							fm.alias = [fm.alias, path.join(" / ")];
 						}
-						renamed[fm.uuid] = true
+						renamed[fm.uuid] = true;
 					}
 				}
 			}
