@@ -9,6 +9,7 @@ import {
 	GoalStatus,
 } from "./constants";
 import { v4 as uuidv4 } from "uuid";
+import { unlink } from "fs";
 
 export async function notify(msg: string) {
 	const PUSHOVER_URI = "api.pushover.net";
@@ -764,6 +765,7 @@ export const AutoField = {
 	},
 
 	logs(dv, entries) {
+		console.log("coucou, tu veux voir ma bite?")
 		const buff = [];
 		let totalTime = 0;
 
@@ -1130,6 +1132,7 @@ export const AutoField = {
 	log(dv) {
 		const dvLib = new DvLib();
 		dvLib.autoFieldLog(dv);
+		// const pages = d
 	},
 };
 
@@ -1531,6 +1534,46 @@ export const Renderer = {
 		dv.table(cols, buff);
 	},
 
+	basicTaskJournalWaiting(dv, data) {
+		const buff = [];
+		const cols = ["uuid", "cause", "tasks"];
+
+		for (const d of data) {
+			const f = d.file;
+			const fm = f.frontmatter;
+			const domain =
+				Helper.getDomain(fm, true) === undefined
+					? "\\-"
+					: Helper.getDomain(fm);
+
+			if (fm.ref_id === undefined) {
+				// console.log(`name: ${d.file.path}`)
+				// console.log(`tasks: ${d.file.tasks.length}`)
+				// console.log(`tasksB: ${f.tasks.length}`)
+				buff.push([
+					// journal.contains(fm.uuid) ? "->" : "\\-",
+					dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+					d.cause,
+					dv.markdownTaskList(f.tasks),
+				]);
+			} else {
+				const ref = dv.pages(`"${Paths.Refs}/${fm.ref_id}"`).array();
+				if (ref.length === 0) {
+					throw new Error(
+						`task: '${fm.uuid}' has an undefined ref_id: '${fm.ref_id}'`,
+					);
+				} else {
+					buff.push([
+						dv.fileLink(f.path, false, fm.uuid.slice(0, 8)),
+						Renderer.makeLinkAlias(dv, ref[0].file),
+						fm.time_estimate,
+						domain,
+					]);
+				}
+			}
+		}
+		dv.table(cols, buff);
+	},
 	basicTaskJournal(dv, data) {
 		const buff = [];
 		// const cols = ["journal", "uuid", "tasks", "estimate"];
@@ -2621,7 +2664,48 @@ export class ListMaker {
 					bins.somedayMaybe.push(page);
 				}
 			} else {
+				if (fm.fm.needs !== undefined && this.noteHelper.hasPendingDependencies(fm.fm.needs)) {
+					page.cause = "dependencies";
+				} else {
+					const fmAt = fm.at;
+					const currentAt = new Date();
+					const fmAfter = fm.after;
+
+					if (fm.fm.at !== undefined) {
+						fmAt.setHours(0);
+						fmAt.setMinutes(0);
+						fmAt.setSeconds(0);
+						fmAt.setMilliseconds(0);
+						currentAt.setHours(0);
+						currentAt.setMinutes(0);
+						currentAt.setSeconds(0);
+						currentAt.setMilliseconds(0);
+					}
+					if (fm.after !== undefined) {
+						fmAfter.setHours(0);
+						fmAfter.setMinutes(0);
+						fmAfter.setSeconds(0);
+						fmAfter.setMilliseconds(0);
+					}
+
+
+					console.log(`current: ${currentAt.getTime()}`);
+					console.log(`at: ${fm.at.getTime()}`);
+					console.log(`after: ${fm.after.getTime()}`);
+
+					if (fm.fm.at !== undefined && fmAt.getTime() > currentAt.getTime()) {
+						page.cause = "at";
+					} else if (fm.fm.after !== undefined && fmAfter.getTime() < currentAt.getTime()) {
+						page.cause = "after";
+					} else {
+						page.cause = "unknown";
+					}
+				}
+
 				bins.waitingFor.push(page);
+				// at
+				// after
+				// needs
 			}
 		}
 
@@ -2634,7 +2718,7 @@ export class ListMaker {
 		if (bins.waitingFor.length > 0) {
 			rs.push(["header", 2, `Waiting (${bins.waitingFor.length})`]);
 			bins.waitingFor.sort(Helper.sortByPriorityAndDurationAndAge);
-			rs.push(["array", Renderer.basicTaskJournal, bins.waitingFor]);
+			rs.push(["array", Renderer.basicTaskJournalWaiting, bins.waitingFor]);
 		}
 
 		if (bins.somedayMaybe.length > 0) {
