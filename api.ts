@@ -13,6 +13,7 @@ import { unlink } from "fs";
 
 export async function notify(msg: string) {
   const PUSHOVER_URI = "api.pushover.net";
+  // @ts-ignore
   const d = await app.vault.readJson(".pushover.json");
   const data = new URLSearchParams({
     message: msg,

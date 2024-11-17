@@ -226,9 +226,15 @@ export default class MyPlugin extends Plugin {
 		let targetName = undefined;
 		const nameHeading = this.getResourceName(cache, start, end);
 		
-		if (cache.frontmatter.alias !== undefined && cache.frontmatter.alias.length > 0) {
-			// problem atheists?
-			targetName = cache.frontmatter.alias[0];
+		const fm = cache.frontmatter;
+
+		if (fm.alias !== undefined) {
+			if (Array.isArray(fm.alias) && fm.alias.length > 0) {
+				// problem atheists?
+				targetName = cache.frontmatter.alias[0];
+			} else {
+				targetName = cache.frontmatter.alias;
+			}
 		} else {
 			targetName = nameHeading;
 		}
@@ -370,6 +376,7 @@ export default class MyPlugin extends Plugin {
 		this.frontmatter = new Frontmatter(this);
 		this.listMaker = new ListMaker(this, this.dv, this.frontmatter);
 		this.generate = new Generator(this.app);
+		// @ts-ignore
 		this.files = {};
 
 		this.api = {
@@ -559,6 +566,7 @@ export default class MyPlugin extends Plugin {
 							// create journal page
 							const note = this.generate.journalEntry();
 							note.then((file) => {
+								// @ts-ignore
 								active.openFile(file, { active: true });
 							});
 							return;
@@ -652,6 +660,7 @@ export default class MyPlugin extends Plugin {
 					if (Helper.nilCheck(task)) {
 						console.error(`Undefined Task: ${taskId}`);
 					} else {
+						// @ts-ignore
 						active.openFile(task);
 					}
 				} else if (dir === Paths.Tasks) {
@@ -723,6 +732,7 @@ export default class MyPlugin extends Plugin {
 							!Helper.nilCheck(f),
 							`Unexpected non-existant Task: ${pages[0].file.path}`,
 						);
+						// @ts-ignore
 						active.openFile(f);
 					} else {
 						console.error(
@@ -814,6 +824,43 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				this.generate.fleeting();
+			},
+		});
+
+		this.addCommand({
+			id: "clippy-the-clipper",
+			name: "Clippy Clip",
+			// @ts-ignore
+			callback: () => {
+				navigator.clipboard.readText().then((text) => {
+					let _id = undefined;
+					try {
+						_id = this.extractUUIDFromLink(text);
+					} catch {
+						return;
+					}
+					const file = this.getFileFromUUID(_id);
+					Assert.True(file !== undefined, `getFileFromUUID: returned undefined for uuid: ${_id}`)
+					const rootDir = file.path.split("/")[0];
+					const authorized = [Paths.Slipbox, Paths.Refs]
+					if (rootDir !== undefined && authorized.contains(rootDir)) {
+						const alias = this.grugAlias(_id);
+						// navigator.clipboard.writeText(alias).then(() => {console.log("coucou, etc etc")});
+						// @ts-ignore
+						const activeLeaf = this.app.workspace.activeLeaf;
+						// @ts-ignore
+						if (activeLeaf) {
+							// @ts-ignore
+							const editor = activeLeaf.view.sourceMode.cmEditor;
+							const cursor = editor.getCursor();
+							editor.replaceRange(alias, cursor);
+						}
+					} else {
+						console.log(`Does not work outside slibe-box, got ${file.path}`)
+						return;
+					}
+
+				});
 			},
 		});
 
@@ -921,11 +968,8 @@ export default class MyPlugin extends Plugin {
 			(file: TFile, data: string, cache: CachedMetadata) => {
 				// console.log("metadataCache - changed");
 				const fm = cache.frontmatter;
-				if (fm.type === 2) {
-					if (this.files[fm.uuid] !== undefined) {
-						const [path, note] = this.files[fm.uuid];
-						fm.alias = [path.join(" / ")];
-					}
+				if (Helper.isUUID(file.basename)) {
+					this.vaultContentDict[file.basename] = file;
 				}
 			},
 		);
@@ -945,7 +989,9 @@ export default class MyPlugin extends Plugin {
 	}
 
 	getIndexDomains() {
+		// @ts-ignore
 		const indexPath = this.app.vault.getAbstractFileByPath("Index.md");
+		// @ts-ignore
 		const index = this.app.metadataCache.getFileCache(indexPath);
 		const domains = [];
 
@@ -1206,7 +1252,6 @@ export default class MyPlugin extends Plugin {
 				continue;
 			}
 
-			// console.log(link.link.slice(link.link.length-3, link.link.length))
 			if (!Helper.isUUID(link.link.slice(0, 36))) {
 				continue;
 			}
@@ -1248,9 +1293,6 @@ export default class MyPlugin extends Plugin {
 			// le domain se trouve à l'index 0
 			// le nom du component se trouve à l'index 1 du chemin
 			Assert.True(path.length >= 2, `Invalid component path: ${path}`);
-			// console.log(path);
-			// console.log(note);
-			// console.log("\n\n\n");
 
 			const componentName = path[1];
 			switch (componentName) {
@@ -1290,6 +1332,7 @@ export default class MyPlugin extends Plugin {
 				const reserved = ["strength routine", "strength routine", "stretch routine", "stretch routine"];
 				for (const [path, note] of results) {
 					const fm = note.frontmatter;
+					// @ts-ignore
 					this.files[fm.uuid] = [path, note];
 
 					if (renamed[fm.uuid] !== true && fm.type === 2) {
