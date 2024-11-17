@@ -1143,6 +1143,7 @@ export default class MyPlugin extends Plugin {
 		console.log("gonext - loadIndex()");
 		const domains = this.getIndexDomains();
 		const components = this.getDomainComponents(domains);
+		const renamed = {};
 
 		for (const domain of Object.keys(components)) {
 			for (const component of Object.keys(components[domain])) {
@@ -1155,11 +1156,20 @@ export default class MyPlugin extends Plugin {
 					continue;
 				}
 
+				const reserved = ["strength routine", "strength routine", "stretch routine", "stretch routine"];
 				for (const [path, note] of results) {
 					const fm = note.frontmatter;
 					this.files[fm.uuid] = [path, note];
-					if (fm.type === 2) {
-						fm.alias = [path.join(" / ")];
+
+					if (renamed[fm.uuid] !== true && fm.type === 2) {
+						if (fm.alias === undefined) {
+							fm.alias = [path.join(" / ")];
+						} else if (Array.isArray(fm.alias)) {
+							fm.alias.push(path.join(" / "));
+						} else {
+							fm.alias = [fm.alias, path.join(" / ")];
+						}
+						renamed[fm.uuid] = true
 					}
 				}
 			}

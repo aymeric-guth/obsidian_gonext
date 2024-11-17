@@ -1,13 +1,13 @@
 {
-	"id": "obsidian_gonext",
-	"name": "gonext",
-	"version": "1.0.53",
-	"minAppVersion": "0.15.0",
-	"description": "Feck off",
-	"author": "AG",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
-	"isDesktopOnly": false,
-	"js": "main.js",
-	"css": "styles.css"
+  "id": "obsidian_gonext",
+  "name": "gonext",
+  "version": "1.0.50",
+  "minAppVersion": "0.15.0",
+  "description": "Feck off",
+  "author": "AG",
+  "authorUrl": "https://obsidian.md",
+  "fundingUrl": "https://obsidian.md/pricing",
+  "isDesktopOnly": false,
+  "js": "main.js",
+  "css": "styles.css"
 }
