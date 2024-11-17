@@ -213,6 +213,37 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
+	grugAlias(_id: string): string {
+		const cache = this.getFileCacheFromUUID(_id)
+		if (cache === undefined) {
+			console.error(`grugAlias: file not found in grug cache ${_id}`);
+			return "";
+		}
+
+		const [start, end] = this.getContentBoundaries(cache);
+		// what is the naming preference?
+		// alias > name heading
+		let targetName = undefined;
+		const nameHeading = this.getResourceName(cache, start, end);
+		
+		if (cache.frontmatter.alias !== undefined && cache.frontmatter.alias.length > 0) {
+			// problem atheists?
+			targetName = cache.frontmatter.alias[0];
+		} else {
+			targetName = nameHeading;
+		}
+
+		const file = this.getFileFromUUID(_id)
+		if (file === undefined) {
+			console.error(`grugAlias: Cannot grug this id: ${_id}`);
+			return "";
+		}
+		const path = `${file.path.split("/").slice(0, -1)}/${_id}`;
+
+		return `[[${path}#${nameHeading}|${targetName}]]`;
+	}
+
+
 	getFileFromUUID(_id: string): TAbstractFile {
 		return this.vaultContentDict[_id];
 	}
@@ -225,8 +256,6 @@ export default class MyPlugin extends Plugin {
 
 		return app.metadataCache.getFileCache(f);
 	}
-
-	generateJournalEntry() { }
 
 	sneakyTabRenamer(app) {
 		// @ts-ignore
@@ -391,6 +420,14 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "grug-alias",
+			name: "Grug Alias",
+			// @ts-ignore
+			callback: () => {
+				this.grugAlias("90a8e960-e067-4c1f-85bc-222ee587f8d4");
+			},
+		});
+		this.addCommand({
 			id: "open-index",
 			name: "Open Index",
 			// @ts-ignore
@@ -420,6 +457,22 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				this.openViewInNewTabIfNotOpened("Planning.md");
+			},
+		});
+		this.addCommand({
+			id: "open-calendar",
+			name: "Open Calendar",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("Calendar.md");
+			},
+		});
+		this.addCommand({
+			id: "open-journal",
+			name: "Open Journal",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("Journal.md");
 			},
 		});
 
@@ -756,7 +809,7 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "gonext-generate-fleeting",
+			id: "generate-fleeting",
 			name: "Generate fleeting note",
 			// @ts-ignore
 			callback: () => {
@@ -770,40 +823,44 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				const file = app.workspace.getActiveFile();
-				const fm = app.metadataCache.getFileCache(file).frontmatter;
-				if (fm === undefined) {
+				if (file === undefined) {
 					return;
 				}
 
-				const rootPath = [
-					`${Paths.Journal}.md`,
-					`${Paths.Inbox}.md`,
-					"Ad Hoc.md",
-					"allDoneTasks.md",
-					"allDoneTasksWithoutLog.md",
-					"allMedia.md",
-					"allProgressedTasks.md",
-					"noteLocator.md",
-					"Praxis.md",
+				const safeFromHarm = [
+					"Calendar.md",
+					"DISCARDED.md",
+					"Energy.md",
+					"Goals.md",
+					"Inbox.md",
+					"Index.md",
+					"Journal.md",
+					"Journal.md",
+					"Logs.md",
+					"Mandala.md",
+					"NEXT ACTIONS.md",
+					"Planning.md",
+					"Projects.md",
+					"SOMEDAY MAYBE.md",
+					"WAITING FOR.md"
 				];
-				for (const p of rootPath) {
-					if (file.path === p) {
+				const fm = this.app.metadataCache.getFileCache(file).frontmatter;
+				if (safeFromHarm.contains(file.path)) {
+						console.log("Oopsie, almost did an oopsie. Got your back bro");
 						return;
+				}
+
+				if (fm.tags !== undefined && fm.tags.length >= 0) {
+					for (const tag of fm.tags) {
+						if (tag === "project/daily") {
+							console.log("Hey George What's up George, You cannot do that George");
+							return;
+						}
 					}
 				}
 
-				// @ts-ignore
-				if (
-					// @ts-ignore
-					file.path.split(0, Paths.Resources.length) ===
-					// @ts-ignore
-					Paths.Resources
-				) {
-					return;
-				}
-
 				console.log(`deleted file: ${file.path}`);
-				app.vault.delete(file);
+				this.app.vault.delete(file);
 			},
 		});
 
