@@ -83,6 +83,47 @@ export default class MyPlugin extends Plugin {
 	vaultContent: TFile[] = [];
 	vaultContentDict: {[ id: string]: TFile} = {};
 
+	openViewInNewTabIfNotOpened(name: string) {
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		// rechercher si pas déja ouvert dans les onglets actifs
+		// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
+		let found = false;
+		let node = undefined;
+		const emptyTabs = [];
+
+		for (const leaf of root.children) {
+			const file = this.getFileFromLeaf(leaf);
+			if (file === undefined) {
+				emptyTabs.push(leaf);
+				continue;
+			}
+
+			if (file.name === name) {
+				found = true;
+				node = leaf;
+			}
+		}
+
+		let file = undefined;
+		if (!found) {
+			if (emptyTabs.length > 0) {
+				node = emptyTabs[0];
+			} else {
+				this.app.workspace.createLeafInParent(
+					root,
+					root.children.length + 1,
+				);
+				node = root.children[root.children.length - 1];
+			}
+		}
+
+		node.openFile(this.app.vault.getAbstractFileByPath(name), {
+			active: true,
+		});
+	}
+
 	openInNewTabIfNotOpened(page) {
 		const active = this.app.workspace.activeLeaf;
 		// @ts-ignore
@@ -347,6 +388,39 @@ export default class MyPlugin extends Plugin {
 		});
 		this.app.workspace.on("resize", () => {
 			return this.sneakyTabRenamer(this.app);
+		});
+
+		this.addCommand({
+			id: "open-index",
+			name: "Open Index",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("Index.md");
+			},
+		});
+		this.addCommand({
+			id: "open-inbox",
+			name: "Open Inbox",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("Inbox.md");
+			},
+		});
+		this.addCommand({
+			id: "open-projects",
+			name: "Open Projects",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("Projects.md");
+			},
+		});
+		this.addCommand({
+			id: "open-planning",
+			name: "Open Planning",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("Planning.md");
+			},
 		});
 
 		this.addCommand({
