@@ -447,6 +447,7 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				this.openViewInNewTabIfNotOpened("Inbox.md");
+				// app.commands.executeCommandById('markdown:toggle-preview');
 			},
 		});
 		this.addCommand({
