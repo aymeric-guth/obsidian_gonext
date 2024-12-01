@@ -1,5 +1,3 @@
-import { assert, group, time } from "console";
-import { unzip } from "zlib";
 import {
 	Paths,
 	Status,
@@ -9,7 +7,6 @@ import {
 	GoalStatus,
 } from "./constants";
 import { v4 as uuidv4 } from "uuid";
-import { unlink } from "fs";
 
 export async function notify(msg: string) {
 	const PUSHOVER_URI = "api.pushover.net";
@@ -966,12 +963,13 @@ export const AutoField = {
 	daily(dv) {
 		const current = dv.current().file.frontmatter;
 		const currentAt = new Date(current.at);
-		const currentAtShort = currentAt.toISOString().slice(0, 10);
+		const currentAtShort = currentAt.toISOString().slice(0, 7);
 
 		// @ts-ignore
 		const gonext = app.plugins.plugins.obsidian_gonext;
 		const noteHelper = new NoteHelper(gonext, dv, new Frontmatter(gonext));
 
+		console.log("1")
 		const pages = dv
 			.pages(`"${Paths.Tasks}"`)
 			.where((page) => {
@@ -1042,30 +1040,63 @@ export const AutoField = {
 			})
 			.sort((k) => k.at, "asc");
 
-		if (pages.length === 0) {
-			return;
+		if (pages.length > 0) {
+			const buff = [];
+			for (const page of pages) {
+				const fm = new FrontmatterJS(page);
+				const h = String(fm.at.getHours()).padStart(2, "0");
+				const m = String(fm.at.getMinutes()).padStart(2, "0");
+				if (page.file.frontmatter.status === "done") {
+					buff.push([
+						`~~${Renderer.makeLinkShortUUID(dv, page.file, "Task")}~~`,
+						`~~${h}:${m}~~`,
+					]);
+				} else {
+					buff.push([
+						`${Renderer.makeLinkShortUUID(dv, page.file, "Task")}`,
+						`${h}:${m}`,
+					]);
+				}
+			}
+			dv.table(["uuid", "at"], buff);
+
 		}
 
-		const buff = [];
+		// AutoField.dailyJoural(dv);
+		AutoField.monthlyJoural(dv);
+
+	},
+
+	monthlyJoural(dv) {
+		const current = new FrontmatterJS(dv.current());
+		const currentAtShort = current.at.toISOString().slice(0, 7);
+
+		const pages = dv
+			.pages(`"Journal"`)
+			.where((page) => {
+				const fm = new FrontmatterJS(page);
+				const atShort = fm.createdAt.toISOString().slice(0, 7);
+				if (atShort === currentAtShort && fm.getProject() === "monthly") {
+					return true;
+				}
+
+				return false;
+			})
+			.sort((k) => k.created_at, "asc");
+
+		dv.header(2, "Journal");
 		for (const page of pages) {
 			const fm = new FrontmatterJS(page);
-			const h = String(fm.at.getHours()).padStart(2, "0");
-			const m = String(fm.at.getMinutes()).padStart(2, "0");
-			if (page.file.frontmatter.status === "done") {
-				buff.push([
-					`~~${Renderer.makeLinkShortUUID(dv, page.file, "Task")}~~`,
-					`~~${h}:${m}~~`,
-				]);
-			} else {
-				buff.push([
-					`${Renderer.makeLinkShortUUID(dv, page.file, "Task")}`,
-					`${h}:${m}`,
-				]);
+			if (page.file.frontmatter.alias !== undefined) {
+				page.file.frontmatter.name = page.file.frontmatter.alias;
+			} else if (fm.getProject() !== undefined) {
+				page.file.frontmatter.name = fm.getProject();
+			} else if (fm.getDomain() !== undefined) {
+				page.file.frontmatter.name = fm.getDomain();
 			}
-		}
-		dv.table(["uuid", "at"], buff);
 
-		AutoField.dailyJoural(dv);
+			dv.paragraph(Renderer.makeLinkName(dv, page.file));
+		}
 	},
 
 	dailyJoural(dv) {

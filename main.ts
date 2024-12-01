@@ -9,7 +9,6 @@ import {
 	addIcon,
 	CachedMetadata,
 	TFile,
-	MetadataCache,
 	TAbstractFile,
 } from "obsidian";
 // @ts-ignore
@@ -37,9 +36,6 @@ import {
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 // import { randomUUID } from "crypto";
 // const { randomUUID } = require("crypto");
-import { v4 as uuidv4 } from "uuid";
-import { continuedIndent } from "@codemirror/language";
-import { throws } from "assert";
 
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
@@ -1138,6 +1134,7 @@ export default class MyPlugin extends Plugin {
 	commonDataValidation(path: string[], note: CachedMetadata) {
 		// pas d'acces au nom du fichier, au chemin avec le CachedMetadata
 		// count de headings level 3 === 1
+		Assert.True(note !== undefined, `'note': undefined 'path': ${path}`);
 		const fm = note.frontmatter;
 		Assert.True(
 			fm !== undefined,
