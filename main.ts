@@ -1209,7 +1209,11 @@ export default class MyPlugin extends Plugin {
 	}
 
 	parseComponentConcepts(path: string[], note: CachedMetadata, q, results) {
-		this.commonDataValidation(path, note);
+		try {
+			this.commonDataValidation(path, note);
+		} catch {
+			return;
+		}
 		const [start, end] = this.getContentBoundaries(note);
 		const resourceName = this.getResourceName(note, start, end);
 		const fm = note.frontmatter;
@@ -1262,7 +1266,11 @@ export default class MyPlugin extends Plugin {
 	}
 
 	parseComponentPatterns(path: string[], note: CachedMetadata, q, results) {
-		this.commonDataValidation(path, note);
+		try {
+			this.commonDataValidation(path, note);
+		} catch {
+			return;
+		}
 		const [start, end] = this.getContentBoundaries(note);
 		const resourceName = this.getResourceName(note, start, end);
 
