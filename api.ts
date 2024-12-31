@@ -3410,6 +3410,7 @@ export class ListMaker {
 			.sort((page) => page.file.frontmatter.at, "desc");
 
 		const now = new Date();
+		// const now = new Date("2024-12-31");
 		const bins = {};
 		for (const page of pages) {
 			const fm = new FrontmatterJS(page);
@@ -3420,12 +3421,13 @@ export class ListMaker {
 				throw new Error(`Invalid date: '${fm.fm.uuid}'`);
 			}
 
-			if (fm.at.getFullYear() < now.getFullYear()) {
-				continue;
-			}
 
 			const weekNumber = this.getWeekNumber5(fm.at);
-			console.log(`weekNumber: ${weekNumber}`)
+			if (fm.at.getFullYear() < now.getFullYear()) {
+				if (weekNumber > 1) {
+					continue;
+				}
+			}
 			// const weekNumber = this.getWeekNumber(fm.at);
 			if (bins[weekNumber] === undefined) {
 				bins[weekNumber] = [fm];
@@ -3504,9 +3506,11 @@ export class ListMaker {
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 	}
 
+	// https://codepen.io/ldijkman/pen/LYdNJvM
 	getWeekNumber5(dt) {
 		const tdt = new Date(dt.valueOf());
-		const dayn = (dt.getDay() + 6) % 7;
+		// const dayn = (dt.getDay() + 6) % 7;
+		const dayn = dt.getDay();
 		tdt.setDate(tdt.getDate() - dayn + 3);
 		const firstThursday = tdt.valueOf();
 		tdt.setMonth(0, 1);
