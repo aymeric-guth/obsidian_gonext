@@ -3409,6 +3409,7 @@ export class ListMaker {
 			})
 			.sort((page) => page.file.frontmatter.at, "desc");
 
+		const now = new Date();
 		const bins = {};
 		for (const page of pages) {
 			const fm = new FrontmatterJS(page);
@@ -3419,7 +3420,12 @@ export class ListMaker {
 				throw new Error(`Invalid date: '${fm.fm.uuid}'`);
 			}
 
-			const weekNumber = this.getWeekNumber4(fm.at);
+			if (fm.at.getFullYear() < now.getFullYear()) {
+				continue;
+			}
+
+			const weekNumber = this.getWeekNumber5(fm.at);
+			console.log(`weekNumber: ${weekNumber}`)
 			// const weekNumber = this.getWeekNumber(fm.at);
 			if (bins[weekNumber] === undefined) {
 				bins[weekNumber] = [fm];
@@ -3428,8 +3434,7 @@ export class ListMaker {
 			}
 		}
 
-		const now = new Date();
-		const currentWeekNumber = this.getWeekNumber4(now);
+		const currentWeekNumber = this.getWeekNumber5(now);
 		// const currentWeekNumber = this.getWeekNumber(now);
 		for (const key of Object.keys(bins)) {
 			const weekNumber = Number(key);
@@ -3497,6 +3502,18 @@ export class ListMaker {
 		const yearStart: any = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
 		// Calculate full weeks to nearest Thursday
 		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+	}
+
+	getWeekNumber5(dt) {
+		const tdt = new Date(dt.valueOf());
+		const dayn = (dt.getDay() + 6) % 7;
+		tdt.setDate(tdt.getDate() - dayn + 3);
+		const firstThursday = tdt.valueOf();
+		tdt.setMonth(0, 1);
+		if (tdt.getDay() !== 4) {
+			tdt.setMonth(0, 1 + ((4 - tdt.getDay()) + 7) % 7);
+		}
+		return 1 + Math.ceil((firstThursday - tdt) / 604800000);
 	}
 
 	getWeekNumber4(d) {
