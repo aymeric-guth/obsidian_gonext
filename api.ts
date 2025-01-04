@@ -3508,15 +3508,21 @@ export class ListMaker {
 
 	// https://codepen.io/ldijkman/pen/LYdNJvM
 	getWeekNumber5(dt) {
+		// @ts-ignore
 		const tdt = new Date(dt.valueOf());
 		// const dayn = (dt.getDay() + 6) % 7;
 		const dayn = dt.getDay();
+		// @ts-ignore
 		tdt.setDate(tdt.getDate() - dayn + 3);
+		// @ts-ignore
 		const firstThursday = tdt.valueOf();
+		// @ts-ignore
 		tdt.setMonth(0, 1);
+		// @ts-ignore
 		if (tdt.getDay() !== 4) {
 			tdt.setMonth(0, 1 + ((4 - tdt.getDay()) + 7) % 7);
 		}
+		// @ts-ignore
 		return 1 + Math.ceil((firstThursday - tdt) / 604800000);
 	}
 
