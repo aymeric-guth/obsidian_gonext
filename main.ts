@@ -476,6 +476,30 @@ export default class MyPlugin extends Plugin {
 				this.openViewInNewTabIfNotOpened("Journal.md");
 			},
 		});
+		this.addCommand({
+			id: "open-next_actions",
+			name: "Open Next Actions",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("NEXT ACTIONS.md");
+			},
+		});
+		this.addCommand({
+			id: "open-someday_maybe",
+			name: "Open Someday Maybe",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("SOMEDAY MAYBE.md");
+			},
+		});
+		this.addCommand({
+			id: "open-waiting_for",
+			name: "Open Waiting For",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("WAITING FOR.md");
+			},
+		});
 
 		this.addCommand({
 			id: "goto-active-task-logs",
