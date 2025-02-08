@@ -4676,19 +4676,35 @@ var MyPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addCommand({
-      id: "open-calendar",
-      name: "Open Calendar",
-      // @ts-ignore
-      callback: () => {
-        this.openViewInNewTabIfNotOpened("Calendar.md");
-      }
-    });
-    this.addCommand({
       id: "open-journal",
       name: "Open Journal",
       // @ts-ignore
       callback: () => {
         this.openViewInNewTabIfNotOpened("Journal.md");
+      }
+    });
+    this.addCommand({
+      id: "open-next_actions",
+      name: "Open Next Actions",
+      // @ts-ignore
+      callback: () => {
+        this.openViewInNewTabIfNotOpened("NEXT ACTIONS.md");
+      }
+    });
+    this.addCommand({
+      id: "open-someday_maybe",
+      name: "Open Someday Maybe",
+      // @ts-ignore
+      callback: () => {
+        this.openViewInNewTabIfNotOpened("SOMEDAY MAYBE.md");
+      }
+    });
+    this.addCommand({
+      id: "open-waiting_for",
+      name: "Open Waiting For",
+      // @ts-ignore
+      callback: () => {
+        this.openViewInNewTabIfNotOpened("WAITING FOR.md");
       }
     });
     this.addCommand({
