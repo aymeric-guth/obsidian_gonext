@@ -469,14 +469,6 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 		this.addCommand({
-			id: "open-calendar",
-			name: "Open Calendar",
-			// @ts-ignore
-			callback: () => {
-				this.openViewInNewTabIfNotOpened("Calendar.md");
-			},
-		});
-		this.addCommand({
 			id: "open-journal",
 			name: "Open Journal",
 			// @ts-ignore
