@@ -969,7 +969,6 @@ export const AutoField = {
 		const gonext = app.plugins.plugins.obsidian_gonext;
 		const noteHelper = new NoteHelper(gonext, dv, new Frontmatter(gonext));
 
-		console.log("1")
 		const pages = dv
 			.pages(`"${Paths.Tasks}"`)
 			.where((page) => {
@@ -1062,8 +1061,8 @@ export const AutoField = {
 
 		}
 
-		// AutoField.dailyJoural(dv);
-		AutoField.monthlyJoural(dv);
+		AutoField.dailyJoural(dv);
+		// AutoField.monthlyJoural(dv);
 
 	},
 
@@ -2378,6 +2377,32 @@ export class Generator {
 		this.gonext = app.gonext;
 	}
 
+	journalDaily() {
+		const now = new Date();
+		const nowDate = now.toISOString().slice(0, 10);
+		// doit être executé depuis la task rataché à la daily, rappel daily = log entry pour task project/daily
+		// Tasks/
+		//		8ac47d50-4b73-41ac-a183-0c3a5f41ff19.md
+		//		8ac47d50-4b73-41ac-a183-0c3a5f41ff19/
+		//			3e43ca71-dfc1-4856-b1c3-10c07ae6f3ef.md
+		const pages = this.dv.pages(`"${Paths.Journal}"`).where((page) => {
+			const fmp = new FrontmatterJS(page);
+			if (fmp.getProject() !== "daily") {
+				return false;
+			}
+
+			if (fmp.createdAt.toISOString().slice(0, 10) !== nowDate) {
+				return false;
+			}
+
+			return true;
+		});
+
+		for (const page of pages) {
+			console.log(page);
+		}
+	}
+
 	fleeting() {
 		const dt = new Date();
 		const note = {
@@ -2405,8 +2430,12 @@ export class Generator {
 		});
 	}
 
-	journalEntry() {
-		const dt = new Date();
+	// @ts-ignore
+	journalEntry(dt) {
+		if (dt === undefined) {
+			dt = new Date();
+		}
+
 		const note = {
 			uuid: uuidv4(),
 			type: 20,
@@ -2417,7 +2446,7 @@ export class Generator {
 		};
 
 		note.path = `Journal/${note.uuid}.md`;
-		note.data = `---\ntype: 20\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\ntags:\n    - project/mission\n---\n## Content\n### entry\n`;
+		note.data = `---\ntype: 20\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.4"\ntags:\n    - project/daily\n---\n## Content\n### entry\n`;
 
 		return this.app.vault.create(note.path, note.data).then((f) => {
 			return f;

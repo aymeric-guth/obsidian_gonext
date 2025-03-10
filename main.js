@@ -877,7 +877,6 @@ var AutoField = {
     const currentAtShort = currentAt.toISOString().slice(0, 7);
     const gonext = app.plugins.plugins.obsidian_gonext;
     const noteHelper = new NoteHelper(gonext, dv, new Frontmatter(gonext));
-    console.log("1");
     const pages = dv.pages(`"${Paths.Tasks}"`).where((page) => {
       const fm = new FrontmatterJS(page);
       if (current.uuid === fm.uuid) {
@@ -930,7 +929,7 @@ var AutoField = {
       }
       dv.table(["uuid", "at"], buff);
     }
-    AutoField.monthlyJoural(dv);
+    AutoField.dailyJoural(dv);
   },
   monthlyJoural(dv) {
     const current = new FrontmatterJS(dv.current());
@@ -1998,6 +1997,23 @@ var Generator = class {
     this.dv = app2.dv;
     this.gonext = app2.gonext;
   }
+  journalDaily() {
+    const now = new Date();
+    const nowDate = now.toISOString().slice(0, 10);
+    const pages = this.dv.pages(`"${Paths.Journal}"`).where((page) => {
+      const fmp = new FrontmatterJS(page);
+      if (fmp.getProject() !== "daily") {
+        return false;
+      }
+      if (fmp.createdAt.toISOString().slice(0, 10) !== nowDate) {
+        return false;
+      }
+      return true;
+    });
+    for (const page of pages) {
+      console.log(page);
+    }
+  }
   fleeting() {
     const dt = new Date();
     const note = {
@@ -2028,8 +2044,11 @@ version: "0.0.4"
       leaf.openFile(file, { active: true });
     });
   }
-  journalEntry() {
-    const dt = new Date();
+  // @ts-ignore
+  journalEntry(dt) {
+    if (dt === void 0) {
+      dt = new Date();
+    }
     const note = {
       uuid: v4_default(),
       type: 20,
@@ -2045,7 +2064,7 @@ uuid: "${note.uuid}"
 created_at: "${note.created_at}"
 version: "0.0.4"
 tags:
-    - project/mission
+    - project/daily
 ---
 ## Content
 ### entry
@@ -4978,6 +4997,47 @@ var MyPlugin = class extends import_obsidian.Plugin {
           return;
         }
         this.openInNewTabIfNotOpened(pages[0]);
+      }
+    });
+    this.addCommand({
+      id: "open-create-journal-daily",
+      name: "Open / Create Journal Daily Page",
+      // @ts-ignore
+      callback: () => {
+        const leaf = app.workspace.activeLeaf;
+        const path = leaf.view.getSyncViewState().state.file;
+        const file = app.vault.getAbstractFileByPath(path);
+        const fm = app.metadataCache.getFileCache(file).frontmatter;
+        let now = void 0;
+        if (path.split("/")[0] === Paths.Tasks && fm.tags.length === 1 && fm.tags[0] === "project/daily") {
+          now = new Date(fm.at);
+        } else {
+          now = new Date();
+        }
+        const nowDate = now.toISOString().slice(0, 10);
+        const pages = this.dv.pages(`"${Paths.Journal}"`).where((page) => {
+          const fmj = new FrontmatterJS(page);
+          if (fmj.getProject() !== "daily") {
+            return false;
+          }
+          if (fmj.createdAt.toISOString().slice(0, 10) !== nowDate) {
+            return false;
+          }
+          return true;
+        });
+        if (pages.length === 1) {
+          this.openInNewTabIfNotOpened(pages[0]);
+          return;
+        } else if (pages.length === 0) {
+          const note = this.generate.journalEntry(now);
+          note.then((file2) => {
+            this.openViewInNewTabIfNotOpened(file2.path);
+          });
+          return;
+        } else {
+          console.error(`Unexpected case where pages.length > 1`);
+          return;
+        }
       }
     });
     this.addCommand({

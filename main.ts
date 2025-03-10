@@ -584,6 +584,7 @@ export default class MyPlugin extends Plugin {
 
 						if (pages.length === 0) {
 							// create journal page
+							// @ts-ignore
 							const note = this.generate.journalEntry();
 							note.then((file) => {
 								// @ts-ignore
@@ -840,6 +841,66 @@ export default class MyPlugin extends Plugin {
 				}
 
 				this.openInNewTabIfNotOpened(pages[0]);
+			},
+		});
+
+		this.addCommand({
+			id: "open-create-journal-daily",
+			name: "Open / Create Journal Daily Page",
+			// @ts-ignore
+			callback: () => {
+				// if command called from task project/daily
+				//		open-or-create-journal-entry(task.at)
+				// else
+				//		open-or-create-journal-entry(now)
+				const leaf = app.workspace.activeLeaf;
+				// @ts-ignore
+				const path = leaf.view.getSyncViewState().state.file;
+				const file = app.vault.getAbstractFileByPath(path);
+				// @ts-ignore
+				const fm = app.metadataCache.getFileCache(file).frontmatter;
+
+				// if command called from task project/daily
+				let now = undefined;
+				if (path.split("/")[0] === Paths.Tasks && fm.tags.length === 1 && fm.tags[0] === "project/daily") {
+					// open-or-create-journal-entry(task.at)
+					now = new Date(fm.at);
+				} else {
+					now = new Date();
+				}
+
+				const nowDate = now.toISOString().slice(0, 10);
+
+				const pages = this.dv.pages(`"${Paths.Journal}"`).where((page) => {
+					const fmj = new FrontmatterJS(page);
+					if (fmj.getProject() !== "daily") {
+						return false;
+					}
+
+					if (fmj.createdAt.toISOString().slice(0, 10) !== nowDate) {
+						return false;
+					}
+
+					return true;
+				});
+
+				if (pages.length === 1) {
+					// open journal entry
+					this.openInNewTabIfNotOpened(pages[0]);
+					return;
+				} else if (pages.length === 0) {
+					// create journal entry
+					const note = this.generate.journalEntry(now);
+					note.then((file) => {
+						this.openViewInNewTabIfNotOpened(file.path);
+					});
+					return;
+					// open journal entry
+				} else {
+					// Unexpected
+					console.error(`Unexpected case where pages.length > 1`);
+					return;
+				}
 			},
 		});
 
