@@ -444,6 +444,14 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 		this.addCommand({
+			id: "open-worldmap",
+			name: "Open World Map",
+			// @ts-ignore
+			callback: () => {
+				this.openViewInNewTabIfNotOpened("WorldMap.md");
+			},
+		});
+		this.addCommand({
 			id: "open-inbox",
 			name: "Open Inbox",
 			// @ts-ignore
@@ -808,6 +816,52 @@ export default class MyPlugin extends Plugin {
 				const now = new Date();
 				const nowIso = now.toISOString().slice(0, 10);
 				// @ts-ignore
+				const pages = this.dv
+					.pages(`"${Paths.Tasks}"`)
+					.where((page) => {
+						if (page.file.frontmatter.at === undefined) {
+							return false;
+						}
+
+						// assign now si at === undefined
+						const fm = new FrontmatterJS(page);
+						if (fm.getProject() !== "daily") {
+							return false;
+						}
+
+						let fmIso = undefined;
+						try {
+							fmIso = fm.at.toISOString().slice(0, 10);
+						} catch {
+							console.warn(`possible invalid data in ${fm.uuid}`);
+							return false;
+						}
+
+						if (fmIso === nowIso) {
+							return true;
+						}
+
+						return false;
+					});
+
+				if (pages.length === 0) {
+					return;
+				}
+
+				this.openInNewTabIfNotOpened(pages[0]);
+			},
+		});
+
+		this.addCommand({
+			id: "open-tomorrows-daily",
+			name: "Open Tomorrow's Daily",
+			// @ts-ignore
+			callback: () => {
+				const now = new Date();
+				now.setDate(now.getDate() + 1);
+				const nowIso = now.toISOString().slice(0, 10);
+				// @ts-ignore
+
 				const pages = this.dv
 					.pages(`"${Paths.Tasks}"`)
 					.where((page) => {
