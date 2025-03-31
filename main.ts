@@ -1147,7 +1147,7 @@ export default class MyPlugin extends Plugin {
 				this.vaultContentDict[f.basename] = f;
 			}
 
-			this.loadIndex();
+			// this.loadIndex();
 		});
 	}
 
