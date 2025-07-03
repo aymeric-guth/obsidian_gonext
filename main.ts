@@ -440,7 +440,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Index",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Index.md");
+				this.openViewInNewTabIfNotOpened("INDEX.md");
 			},
 		});
 		this.addCommand({
@@ -456,7 +456,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Inbox",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Inbox.md");
+				this.openViewInNewTabIfNotOpened("INBOX.md");
 				// app.commands.executeCommandById('markdown:toggle-preview');
 			},
 		});
@@ -679,7 +679,7 @@ export default class MyPlugin extends Plugin {
 						// @ts-ignore
 						active.openFile(
 							// @ts-ignore
-							this.app.vault.getAbstractFileByPath("Index.md"),
+							this.app.vault.getAbstractFileByPath("INDEX.md"),
 						);
 					}
 				} else if (dir === Paths.Logs) {
@@ -1024,9 +1024,7 @@ export default class MyPlugin extends Plugin {
 					"Energy.md",
 					"Goals.md",
 					"Inbox.md",
-					"Index.md",
-					"Journal.md",
-					"Journal.md",
+					"INDEX.md",
 					"Logs.md",
 					"Mandala.md",
 					"NEXT ACTIONS.md",
