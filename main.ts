@@ -98,7 +98,7 @@ export default class MyPlugin extends Plugin {
 		for (const leaf of root.children) {
 
 			const file = this.getFileFromLeaf(leaf);
-			if (file === undefined) {
+			if (file === undefined || file === null) {
 				emptyTabs.push(leaf);
 				continue;
 			}
@@ -139,7 +139,7 @@ export default class MyPlugin extends Plugin {
 
 		for (const leaf of root.children) {
 			const file = this.getFileCacheFromLeaf(leaf);
-			if (file === undefined) {
+			if (file === undefined || file === null) {
 				emptyTabs.push(leaf);
 				continue;
 			}
@@ -177,6 +177,9 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			file = leaf.view.file;
 		} catch {
+			return undefined;
+		}
+		if (file === undefined || file === null) {
 			return undefined;
 		}
 		// @ts-ignore
