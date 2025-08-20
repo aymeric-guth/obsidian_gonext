@@ -96,6 +96,7 @@ export default class MyPlugin extends Plugin {
 		const emptyTabs = [];
 
 		for (const leaf of root.children) {
+
 			const file = this.getFileFromLeaf(leaf);
 			if (file === undefined) {
 				emptyTabs.push(leaf);
@@ -174,7 +175,7 @@ export default class MyPlugin extends Plugin {
 		let file = undefined;
 		try {
 			// @ts-ignore
-			file = leaf.view.getSyncViewState().state.file;
+			file = leaf.view.file;
 		} catch {
 			return undefined;
 		}
@@ -188,7 +189,7 @@ export default class MyPlugin extends Plugin {
 		let file = undefined;
 		try {
 			// @ts-ignore
-			file = leaf.view.getSyncViewState().state.file;
+			file = leaf.view.file;
 		} catch {
 			return undefined;
 		}
@@ -898,6 +899,51 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "open-yesterdays-daily",
+			name: "Open Yesterday's Daily",
+			// @ts-ignore
+			callback: () => {
+				const now = new Date();
+				now.setDate(now.getDate() - 1);
+				const nowIso = now.toISOString().slice(0, 10);
+				// @ts-ignore
+
+				const pages = this.dv
+					.pages(`"${Paths.Tasks}"`)
+					.where((page) => {
+						if (page.file.frontmatter.at === undefined) {
+							return false;
+						}
+
+						// assign now si at === undefined
+						const fm = new FrontmatterJS(page);
+						if (fm.getProject() !== "daily") {
+							return false;
+						}
+
+						let fmIso = undefined;
+						try {
+							fmIso = fm.at.toISOString().slice(0, 10);
+						} catch {
+							console.warn(`possible invalid data in ${fm.uuid}`);
+							return false;
+						}
+
+						if (fmIso === nowIso) {
+							return true;
+						}
+
+						return false;
+					});
+
+				if (pages.length === 0) {
+					return;
+				}
+
+				this.openInNewTabIfNotOpened(pages[0]);
+			},
+		});
 		this.addCommand({
 			id: "open-create-journal-daily",
 			name: "Open / Create Journal Daily Page",
