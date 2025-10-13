@@ -485,7 +485,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Journal",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Journal.md");
+				this.openViewInNewTabIfNotOpened("803 Slipbox/67fb49c2-05d1-48be-98ce-27b269660957.md");
 			},
 		});
 		this.addCommand({
@@ -1104,57 +1104,6 @@ export default class MyPlugin extends Plugin {
 
 				console.log(`deleted file: ${file.path}`);
 				this.app.vault.delete(file);
-			},
-		});
-
-		this.addCommand({
-			id: "display-modal",
-			name: "Display modal",
-			callback: () => {
-				new ExampleModal(this.app).open();
-			},
-		});
-
-		this.addCommand({
-			id: "go-parent",
-			name: "Go Parent",
-			// @ts-ignore
-			callback: () => {
-				const file = app.workspace.getActiveFile();
-				const fm = app.metadataCache.getFileCache(file).frontmatter;
-				if (fm === undefined) {
-					return;
-				}
-
-				if (fm.parent_id === undefined && fm.ref_id === undefined) {
-					console.warn(
-						`parent_id: '${fm.parent_id}' ref_id: '${fm.ref_id}'`,
-					);
-					return;
-				}
-
-				if (
-					fm.type === undefined ||
-					(fm.type !== Types.Log &&
-						fm.type !== Types.Media &&
-						fm.type !== Types.Fleeting)
-				) {
-					console.warn(
-						`invalid type: '${fm.type}' for note: '${fm.uuid}'`,
-					);
-					return;
-				}
-
-				// https://docs.obsidian.md/Reference/TypeScript+API/Workspace/createLeafInParent
-				// app.workspace.createLeafInParent();
-				// const leaf = app.workspace.getLeaf(true);
-				// parent id
-				const parent =
-					fm.type === Types.Log
-						? `${Paths.Tasks}/${fm.parent_id}.md`
-						: `${Paths.Refs}/${fm.ref_id}.md`;
-				const page = app.vault.getAbstractFileByPath(parent);
-				app.workspace.openLinkText(parent, "/", false);
 			},
 		});
 
