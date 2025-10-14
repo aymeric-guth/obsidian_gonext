@@ -28,8 +28,6 @@ import {
 	// @ts-ignore
 	Generator,
 	// @ts-ignore
-	notify,
-	// @ts-ignore
 	Assert,
 } from "./api";
 // @ts-ignore
@@ -57,11 +55,16 @@ export default class MyPlugin extends Plugin {
 	listMaker: ListMaker;
 	frontmatter: Frontmatter;
 	generate: Generator;
-	notify: any;
 	vaultContent: TFile[] = [];
 	vaultContentDict: { [id: string]: TFile } = {};
 
 	openViewInNewTabIfNotOpened(name: string) {
+    const f = app.vault.getAbstractFileByPath(name);
+    if (f === undefined || f === null) {
+      console.warn(`file not found ${name}`);
+      return;
+    }
+
 		const active = this.app.workspace.activeLeaf;
 		// @ts-ignore
 		const root = active.parent;
@@ -72,20 +75,17 @@ export default class MyPlugin extends Plugin {
 		const emptyTabs = [];
 
 		for (const leaf of root.children) {
-
 			const file = this.getFileFromLeaf(leaf);
 			if (file === undefined || file === null) {
 				emptyTabs.push(leaf);
 				continue;
 			}
 
-			if (file.name === name) {
+			if (file.name === f.name) {
 				found = true;
 				node = leaf;
 			}
 		}
-
-		const file = undefined;
 		if (!found) {
 			if (emptyTabs.length > 0) {
 				node = emptyTabs[0];
@@ -98,7 +98,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		node.openFile(this.app.vault.getAbstractFileByPath(name), {
+		node.openFile(f, {
 			active: true,
 		});
 	}
@@ -276,7 +276,6 @@ export default class MyPlugin extends Plugin {
 			renderer: Renderer,
 			autoField: AutoField,
 			dvLib: new DvLib(),
-			notify: notify,
 		};
 
 		// @ts-ignore
@@ -358,6 +357,81 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				this.openViewInNewTabIfNotOpened("WAITING FOR.md");
+			},
+		});
+
+		this.addCommand({
+			id: "open-todays-log",
+			name: "Open Today's Logs",
+			// @ts-ignore
+			callback: () => {
+				const now = new Date();
+				const nowIso = now.toISOString().slice(0, 10);
+				// @ts-ignore
+				const pages = this.dv
+					.pages(`"${Paths.Slipbox}"`)
+					.where((page) => {
+            const fm = new FrontmatterJS(page);
+            const cache = this.getFileCacheFromUUID(fm.uuid);
+		        const [start, end] = this.getContentBoundaries(cache);
+          if (start === 0 && end === 0) {
+            return false;
+          }
+		        const nameHeading = this.getResourceName(cache, start, end);
+          if (nameHeading === undefined) {
+            return false;
+          }
+          if (nameHeading !== nowIso) {
+						return false;
+          }
+            // this.getResourceName
+						return true;
+					});
+
+				if (pages.length === 0) {
+          // create permanent
+          this.generate.permanent(nowIso);
+					return;
+				}
+
+				this.openInNewTabIfNotOpened(pages[0]);
+			},
+		});
+
+		this.addCommand({
+			id: "open-yesterdays-logs",
+			name: "Open Yesterday's Logs",
+			// @ts-ignore
+			callback: () => {
+				const now = new Date();
+				now.setDate(now.getDate() - 1);
+				const nowIso = now.toISOString().slice(0, 10);
+				// @ts-ignore
+				const pages = this.dv
+					.pages(`"${Paths.Slipbox}"`)
+					.where((page) => {
+            const fm = new FrontmatterJS(page);
+            const cache = this.getFileCacheFromUUID(fm.uuid);
+		        const [start, end] = this.getContentBoundaries(cache);
+          if (start === 0 && end === 0) {
+            return false;
+          }
+		        const nameHeading = this.getResourceName(cache, start, end);
+          if (nameHeading === undefined) {
+            return false;
+          }
+          if (nameHeading !== nowIso) {
+						return false;
+          }
+            // this.getResourceName
+						return true;
+					});
+
+				if (pages.length === 0) {
+					return;
+				}
+
+				this.openInNewTabIfNotOpened(pages[0]);
 			},
 		});
 
@@ -637,7 +711,12 @@ export default class MyPlugin extends Plugin {
 
 	getContentBoundaries(note: CachedMetadata) {
 		// locate content offset
-		const fm = note.frontmatter;
+    let fm = undefined;
+    try {
+		  fm = note.frontmatter;
+    } catch {
+      return [0, 0];
+    }
 		let found = false;
 		let start = 0;
 		let end = 0;
@@ -672,7 +751,13 @@ export default class MyPlugin extends Plugin {
 	getResourceName(note: CachedMetadata, start: number, end: number): string {
 		let resourceName = "";
 		let lvl3HeadingCount = 0;
-		const fm = note.frontmatter;
+    let fm = undefined;
+    try {
+		  fm = note.frontmatter;
+    } catch {
+      console.log(note);
+      return;
+    }
 
 		for (const heading of note.headings) {
 			// heading lvl 3 in bound of `content`
@@ -716,28 +801,5 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-export class ExampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const { contentEl } = this;
-		// @ts-ignore
-		const dv = this.app.plugins.plugins.dataview.api;
-		const tasks = dv.pages().array().slice(0, 10);
-		let s = "";
-		for (const task of tasks) {
-			s += `${task.file.path}\n\n`;
-		}
-		contentEl.setText(s);
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
 	}
 }

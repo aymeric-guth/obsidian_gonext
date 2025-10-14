@@ -8,85 +8,6 @@ import {
 } from "./constants";
 import { v4 as uuidv4 } from "uuid";
 
-export async function notify(msg: string) {
-	const PUSHOVER_URI = "api.pushover.net";
-	// @ts-ignore
-	const d = await app.vault.readJson(".pushover.json");
-	const data = new URLSearchParams({
-		message: msg,
-		token: d.pushover_token,
-		user: d.pushover_user,
-	});
-	console.log(data.toString());
-
-	await fetch(`https://${PUSHOVER_URI}/1/messages.json`, {
-		method: "POST",
-		// mode: 'no-cors',
-		cache: "no-cache",
-		headers: {
-			"Content-type": "application/x-www-form-urlencoded",
-		},
-		body: data,
-	});
-}
-
-class FilterBy {
-	public fm: any;
-	public predicates: string[];
-	public contexts: string[];
-
-	constructor(fm: any) {
-		this.fm = fm;
-		if (fm === undefined) {
-			this.predicates = [];
-		} else {
-			this.predicates = Array.isArray(fm.filter_by) ? fm.filter_by : [];
-		}
-	}
-
-	nameInNamespace(fm: any, ns: string[]) {
-		let found = false;
-		if (ns.length === 0) {
-			return true;
-		}
-
-		for (const a of ns) {
-			const root = a.split("/");
-			Assert.True(root.length === 2, `Invalid tag: '${a}'`);
-			const parent =
-				root[0].slice(0, 1) === "!" ? root[0].slice(1) : root[0];
-			const name = Helper.getTag(fm, parent);
-
-			if (a.slice(0, 1) === "!") {
-				// negative match, discard entry
-				if (name === a.slice(1)) {
-					return false;
-					// no match, reinit
-				} else {
-					found = true;
-				}
-			} else {
-				// positive match, keep entry
-				if (name === a) {
-					found = true;
-					// no match, reinit
-				} else {
-					found = false;
-				}
-			}
-		}
-
-		return found;
-	}
-
-	filter(fm: any) {
-		if (this.predicates.length == 0) {
-			return false;
-		}
-		return !this.nameInNamespace(fm, this.predicates);
-	}
-}
-
 export class FrontmatterJS {
 	public uuid: string;
 	public version: string;
@@ -2430,6 +2351,36 @@ export class Generator {
 		});
 	}
 
+	permanent(name: string) {
+		const dt = new Date();
+		const note = {
+			uuid: uuidv4(),
+			type: 2,
+			version: "0.0.3",
+			created_at: dt.toISOString(),
+			path: "",
+			data: "",
+		};
+
+		note.path = `${Paths.Slipbox}/${note.uuid}.md`;
+		if (name === undefined) {
+			note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n## Content\n`;
+		} else {
+			note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n## Content\n### ${name}\n`;
+		}
+
+		const f = this.app.vault.create(note.path, note.data).then((f) => {
+			return f;
+		});
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		this.app.workspace.createLeafInParent(root, root.children.length + 1);
+		const leaf = root.children[root.children.length - 1];
+		f.then((file) => {
+			leaf.openFile(file, { active: true });
+		});
+	}
 	// @ts-ignore
 	journalEntry(dt) {
 		if (dt === undefined) {
