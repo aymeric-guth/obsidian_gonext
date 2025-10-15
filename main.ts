@@ -387,6 +387,8 @@ export default class MyPlugin extends Plugin {
               start,
               end,
             );
+          // console.log(`nameHeading: ${nameHeading}`);
+
             if (nameHeading === undefined) {
               return false;
             }
@@ -445,6 +447,22 @@ export default class MyPlugin extends Plugin {
         }
 
         this.openInNewTabIfNotOpened(pages[0]);
+      },
+    });
+
+    this.addCommand({
+      id: "list-index-content",
+      name: "List Index Content",
+      // @ts-ignore
+      callback: () => {
+        // @ts-ignore
+        const abstractPath = this.app.vault.getAbstractFileByPath("INDEX.md");
+        // @ts-ignore
+        const cache = this.app.metadataCache.getFileCache(abstractPath);
+        for (const link of cache.links) {
+          console.log(link.displayText);
+        }
+
       },
     });
 
@@ -639,25 +657,19 @@ export default class MyPlugin extends Plugin {
       name: "Safe Delete",
       // @ts-ignore
       callback: () => {
-        const file = app.workspace.getActiveFile();
+        const file = this.app.workspace.getActiveFile();
         if (file === undefined) {
           return;
         }
 
         const safeFromHarm = [
-          "Calendar.md",
-          "DISCARDED.md",
-          "Energy.md",
-          "Goals.md",
-          "Inbox.md",
+          "INBOX.md",
           "INDEX.md",
           "Logs.md",
-          "Mandala.md",
           "NEXT ACTIONS.md",
-          "Planning.md",
-          "Projects.md",
           "SOMEDAY MAYBE.md",
           "WAITING FOR.md",
+          "Planning.md",
         ];
         const fm =
           this.app.metadataCache.getFileCache(file).frontmatter;
@@ -734,52 +746,15 @@ export default class MyPlugin extends Plugin {
         const editor = node.view.sourceMode.cmEditor;
         editor.insertText("\n\n---\n\n", editor.lastLine());
 
-        node.openFile(f, {
-          active: true,
-        });
-
-        // editor.setLine(editor.lastLine());
+        if (this.app.workspace.activeLeaf.view.file === undefined || this.app.workspace.activeLeaf.view.file.name !== "INBOX.md") {
+          node.openFile(f, {
+            active: true,
+          });
+        }
 
         return;
-        // navigator.clipboard.readText().then((text) => {
-        // 	let _id = undefined;
-        // 	try {
-        // 		_id = this.extractUUIDFromLink(text);
-        // 	} catch {
-        // 		return;
-        // 	}
-        // 	const file = this.getFileFromUUID(_id);
-        // 	Assert.True(
-        // 		file !== undefined,
-        // 		`getFileFromUUID: returned undefined for uuid: ${_id}`,
-        // 	);
-        // 	const rootDir = file.path.split("/")[0];
-        // 	const authorized = [Paths.Slipbox, Paths.Refs];
-        // 	if (rootDir !== undefined && authorized.contains(rootDir)) {
-        // 		const alias = this.grugAlias(_id);
-        // 		// navigator.clipboard.writeText(alias).then(() => {console.log("coucou, etc etc")});
-        // 		// @ts-ignore
-        // 	} else {
-        // 		console.log(
-        // 			`Does not work outside slibe-box, got ${file.path}`,
-        // 		);
-        // 		return;
-        // 	}
-        // });
       },
     });
-
-    // hook pour mettre à jour les alias
-    this.app.metadataCache.on(
-      "changed",
-      (file: TFile, data: string, cache: CachedMetadata) => {
-        // console.log("metadataCache - changed");
-        const fm = cache.frontmatter;
-        if (Helper.isUUID(file.basename)) {
-          this.vaultContentDict[file.basename] = file;
-        }
-      },
-    );
 
     this.app.workspace.onLayoutReady(() => {
       console.log("workspace - layout-ready");
@@ -790,21 +765,7 @@ export default class MyPlugin extends Plugin {
 
         this.vaultContentDict[f.basename] = f;
       }
-
-      // this.loadIndex();
     });
-  }
-
-  commonDataValidation(path: string[], note: CachedMetadata) {
-    // pas d'acces au nom du fichier, au chemin avec le CachedMetadata
-    // count de headings level 3 === 1
-    Assert.True(note !== undefined, `'note': undefined 'path': ${path}`);
-    const fm = note.frontmatter;
-    Assert.True(
-      fm !== undefined,
-      `Invalid FrontMatter in: ${path.join("/")}`,
-    );
-    Assert.True(note.headings !== undefined, `Blank resource: ${fm.uuid}`);
   }
 
   getContentBoundaries(note: CachedMetadata) {
