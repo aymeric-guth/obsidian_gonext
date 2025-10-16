@@ -773,6 +773,17 @@ export default class MyPlugin extends Plugin {
       }
     });
     // this.app.metadataCache.on
+		this.app.metadataCache.on(
+			"changed",
+			(file: TFile, data: string, cache: CachedMetadata) => {
+				// console.log("metadataCache - changed");
+				const fm = cache.frontmatter;
+				if (Helper.isUUID(file.basename)) {
+					this.vaultContentDict[file.basename] = file;
+				}
+			},
+		);
+
   }
 
   getContentBoundaries(note: CachedMetadata) {
@@ -816,14 +827,6 @@ export default class MyPlugin extends Plugin {
 
   getResourceName(note: CachedMetadata, start: number, end: number): string {
     let resourceName = "";
-    let lvl3HeadingCount = 0;
-    let fm = undefined;
-    try {
-      fm = note.frontmatter;
-    } catch {
-      console.log(note);
-      return;
-    }
 
     for (const heading of note.headings) {
       // heading lvl 3 in bound of `content`
@@ -833,7 +836,7 @@ export default class MyPlugin extends Plugin {
         heading.position.end.offset < end
       ) {
         resourceName = heading.heading;
-        lvl3HeadingCount++;
+        break;
       }
     }
 
