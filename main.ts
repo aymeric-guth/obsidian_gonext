@@ -173,7 +173,7 @@ export default class MyPlugin extends Plugin {
       return undefined;
     }
     // @ts-ignore
-    return app.vault.getAbstractFileByPath(file);
+    return this.app.vault.getAbstractFileByPath(file);
   }
 
   extractUUIDFromLink(link: string) {
@@ -387,7 +387,7 @@ export default class MyPlugin extends Plugin {
               start,
               end,
             );
-          // console.log(`nameHeading: ${nameHeading}`);
+            // console.log(`nameHeading: ${nameHeading}`);
 
             if (nameHeading === undefined) {
               return false;
@@ -456,13 +456,13 @@ export default class MyPlugin extends Plugin {
       // @ts-ignore
       callback: () => {
         // @ts-ignore
-        const abstractPath = this.app.vault.getAbstractFileByPath("INDEX.md");
+        const abstractPath =
+          this.app.vault.getAbstractFileByPath("INDEX.md");
         // @ts-ignore
         const cache = this.app.metadataCache.getFileCache(abstractPath);
         for (const link of cache.links) {
           console.log(link.displayText);
         }
-
       },
     });
 
@@ -702,13 +702,13 @@ export default class MyPlugin extends Plugin {
       // @ts-ignore
       callback: () => {
         // ouverture pas instantanée
-        const f = app.vault.getAbstractFileByPath("INBOX.md");
+        const f = this.app.vault.getAbstractFileByPath("INBOX.md");
         if (f === undefined || f === null) {
-          console.warn(`file not found ${name}`);
+          console.warn(`file not found INBOX.md`);
           return;
         }
 
-        const active = this.app.workspace.activeLeaf;
+        const active = this.app.workspace.getLeaf();
         // @ts-ignore
         const root = active.parent;
         // rechercher si pas déja ouvert dans les onglets actifs
@@ -742,17 +742,23 @@ export default class MyPlugin extends Plugin {
           }
         }
 
-        // @ts-ignore
-        const editor = node.view.sourceMode.cmEditor;
-        editor.insertText("\n\n---\n\n", editor.lastLine());
-
-        if (this.app.workspace.activeLeaf.view.file === undefined || this.app.workspace.activeLeaf.view.file.name !== "INBOX.md") {
-          node.openFile(f, {
-            active: true,
-          });
+        const editorAction = (node) => {
+            // @ts-ignore
+            const editor = node.view.sourceMode.cmEditor;
+            editor.insertText("\n\n---\n\n", editor.lastLine());
+            editor.setCursor(editor.lastLine(), 0);
         }
 
-        return;
+        if (
+          this.app.workspace.getActiveFile() === null ||
+          this.app.workspace.getActiveFile().name !== "INBOX.md"
+        ) {
+          node.openFile(f, {
+            active: true,
+          }).then((_) => editorAction(node));
+        } else {
+          editorAction(node);
+        }
       },
     });
 
@@ -766,6 +772,7 @@ export default class MyPlugin extends Plugin {
         this.vaultContentDict[f.basename] = f;
       }
     });
+    // this.app.metadataCache.on
   }
 
   getContentBoundaries(note: CachedMetadata) {
@@ -836,10 +843,10 @@ export default class MyPlugin extends Plugin {
     //   lvl3HeadingCount === 0,
     //   `Resource does not declares a name: ${fm.uuid}`,
     // );
-    Assert.False(
-      lvl3HeadingCount > 1,
-      `Resource has multiple names: ${fm.uuid}`,
-    );
+    // Assert.False(
+    //   lvl3HeadingCount > 1,
+    //   `Resource has multiple names: ${fm.uuid}`,
+    // );
 
     return resourceName;
   }
