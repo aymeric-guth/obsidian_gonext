@@ -35,18 +35,18 @@ import { Paths, Status, Types, Namespace, Default } from "./constants";
 
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShort = [
-	"Jan",
-	"Feb",
-	"Mar",
-	"Apr",
-	"May",
-	"Jun",
-	"Jul",
-	"Aug",
-	"Sep",
-	"Oct",
-	"Nov",
-	"Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 // Remember to rename these classes and interfaces!
@@ -759,11 +759,11 @@ export default class MyPlugin extends Plugin {
         }
 
         const editorAction = (node) => {
-            // @ts-ignore
-            const editor = node.view.sourceMode.cmEditor;
-            editor.insertText("\n\n---\n\n", editor.lastLine());
-            editor.setCursor(editor.lastLine(), 0);
-        }
+          // @ts-ignore
+          const editor = node.view.sourceMode.cmEditor;
+          editor.insertText("\n\n---\n\n", editor.lastLine());
+          editor.setCursor(editor.lastLine(), 0);
+        };
 
         if (
           this.app.workspace.getActiveFile() === null ||
@@ -789,117 +789,98 @@ export default class MyPlugin extends Plugin {
       }
     });
     // this.app.metadataCache.on
-		this.app.metadataCache.on(
-			"changed",
-			(file: TFile, data: string, cache: CachedMetadata) => {
-				if (Helper.isUUID(file.basename)) {
-					this.vaultContentDict[file.basename] = file;
-				}
-			},
-		);
+    this.app.metadataCache.on(
+      "changed",
+      (file: TFile, data: string, cache: CachedMetadata) => {
+        if (Helper.isUUID(file.basename)) {
+          this.vaultContentDict[file.basename] = file;
+        }
+      },
+    );
+
+    this.app.workspace.on("active-leaf-change", () => {
+      return this.sneakyTabRenamer(this.app);
+    });
+    this.app.workspace.on("quick-preview", () => {
+      return this.sneakyTabRenamer(this.app);
+    });
+    this.app.workspace.on("resize", () => {
+      return this.sneakyTabRenamer(this.app);
+    });
   }
 
-	sneakyTabRenamer(app) {
-		// @ts-ignore
-		const root = app.workspace.activeLeaf.parent;
+  sneakyTabRenamer(app) {
+    // @ts-ignore
+    const root = app.workspace.getLeaf().parent;
 
-		for (const leaf of root.children) {
-			let path = undefined;
-			try {
-				path = leaf.view.getSyncViewState().state.file;
-			} catch {
-				continue;
-			}
-			const file = app.vault.getAbstractFileByPath(path);
-			// @ts-ignore
-			const fm =
-				// @ts-ignore
-				app.metadataCache.getFileCache(file).frontmatter;
+    for (const leaf of root.children) {
+      const file = leaf.view.file;
+      if (file === undefined) {
+        continue;
+      }
 
-			if (fm === undefined) {
-				continue;
-			}
+      // @ts-ignore
+      const fm =
+        // @ts-ignore
+        app.metadataCache.getFileCache(file).frontmatter;
+      // console.log(fm)
+      const cache = app.metadataCache.getFileCache(file);
 
-			let text = "";
+      console.log(fm)
+      if (fm === undefined) {
+        continue;
+      }
 
-			if (fm.type === 3 && Helper.getProject(fm) !== undefined) {
-				if (Helper.getProject(fm) === "project/daily") {
-					const at = new Date(fm.at);
-					text = `(D) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
-					// text = `📅 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
-				} else {
-					text = `(T) ${Helper.getProject(fm).slice(8)}`;
-				}
-			} else if (fm.type === 2) {
-				if (!Helper.nilCheck(fm.alias)) {
-					let buff = "";
-					for (const alias of fm.alias) {
-						if (buff.length === 0) {
-							buff = alias;
-						} else if (alias.length < buff.length) {
-							buff = alias;
-						}
-					}
+      let text = "";
 
-					const note = this.getFileCacheFromLeaf(leaf);
-					text = `📜 ${buff}`;
+      if (fm.type === 3 && Helper.getProject(fm) === "project/daily") {
+        const at = new Date(fm.at);
+        text = `(A) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
+      } else if (fm.type === 2 || fm.type === 1) {
+        if (!Helper.nilCheck(fm.alias)) {
+          let buff = "";
+          if (typeof(fm.alias) === "string") {
+            buff = fm.alias;
+          } else {
+          for (const alias of fm.alias) {
+            if (buff.length === 0) {
+              buff = alias;
+            } else if (alias.length < buff.length) {
+              buff = alias;
+            }
+          }
+          }
 
-					if (note.headings.length > 1) {
-						for (const heading of note.headings) {
-							if (
-								heading.level === 3 &&
-								heading.heading === "index"
-							) {
-								text = `(I) ${buff}`;
-								break;
-							}
-						}
-					}
-				} else {
-					// read level 3 heading
-					const note = this.getFileCacheFromLeaf(leaf);
-					if (note.headings.length < 1) {
-						continue;
-					}
+          if (fm.type === 2) {
+            text = `(N) ${buff}`;
+          } else {
+            text = `(V) ${buff}`;
+          }
 
-					let found = false;
-					for (const heading of note.headings) {
-						if (heading.level === 3) {
-							found = true;
-							text = `📜 ${heading.heading}`;
-							break;
-						}
-					}
-					if (!found) {
-						text = note.frontmatter.uuid;
-					}
-				}
-			} else if (fm.type === 20) {
-				const createdAt = new Date(fm.created_at);
-				// text = `📓 ${dayShort[at.getDay()]}. ${at.getDay()} ${monthShort[at.getMonth()]}`;
-				if (fm.alias !== undefined) {
-					text = `(J) ${fm.alias}`;
-				} else {
-					text = `(J) ${dayShort[createdAt.getDay()]}. ${createdAt.getDate()} ${monthShort[createdAt.getMonth()]}`;
-				}
-			} else if (fm.type === 12) {
-				if (fm.name !== undefined && fm.name !== "") {
-					text = `(P) ${fm.name}`;
-				}
-			} else if (fm.type === 13) {
-				text = `(I) ${fm.uuid}`;
-			} else {
-				continue;
-			}
-			if (text !== "") {
-				// 📓
-				// @ts-ignore
-				leaf.tabHeaderInnerTitleEl.innerText = text;
-				// @ts-ignore
-				leaf.tabHeaderInnerTitleEl.innerHTML = text;
-			}
-		}
-	}
+        } else {
+          // read level 3 heading
+
+
+          const [start, end] = this.getContentBoundaries(cache);
+          // what is the naming preference?
+          // alias > name heading
+          const name = this.getResourceName(cache, start, end);
+          if (name === "") {
+            text = `(N) ${fm.uuid}`;
+          } else {
+            text = `(N) ${name}`;
+          }
+        }
+      }
+
+      if (text !== "") {
+        // @ts-ignore
+        leaf.tabHeaderInnerTitleEl.innerText = text;
+        // @ts-ignore
+        leaf.tabHeaderInnerTitleEl.innerHTML = text;
+      }
+    }
+  }
 
   getContentBoundaries(note: CachedMetadata) {
     // locate content offset
