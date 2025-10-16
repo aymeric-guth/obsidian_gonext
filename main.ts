@@ -820,13 +820,9 @@ export default class MyPlugin extends Plugin {
       }
 
       // @ts-ignore
-      const fm =
-        // @ts-ignore
-        app.metadataCache.getFileCache(file).frontmatter;
-      // console.log(fm)
       const cache = app.metadataCache.getFileCache(file);
-
-      console.log(fm)
+      // @ts-ignore
+      const fm = cache.frontmatter;
       if (fm === undefined) {
         continue;
       }
@@ -835,50 +831,43 @@ export default class MyPlugin extends Plugin {
 
       if (fm.type === 3 && Helper.getProject(fm) === "project/daily") {
         const at = new Date(fm.at);
-        text = `(A) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
+        text = `${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
       } else if (fm.type === 2 || fm.type === 1) {
         if (!Helper.nilCheck(fm.alias)) {
-          let buff = "";
           if (typeof(fm.alias) === "string") {
-            buff = fm.alias;
+            text = fm.alias;
           } else {
-          for (const alias of fm.alias) {
-            if (buff.length === 0) {
-              buff = alias;
-            } else if (alias.length < buff.length) {
-              buff = alias;
+            for (const alias of fm.alias) {
+              if (text.length === 0 || alias.length < text.length) {
+                text = alias;
+              }
             }
           }
-          }
-
-          if (fm.type === 2) {
-            text = `(N) ${buff}`;
-          } else {
-            text = `(V) ${buff}`;
-          }
-
         } else {
-          // read level 3 heading
-
-
           const [start, end] = this.getContentBoundaries(cache);
           // what is the naming preference?
           // alias > name heading
           const name = this.getResourceName(cache, start, end);
-          if (name === "") {
-            text = `(N) ${fm.uuid}`;
-          } else {
-            text = `(N) ${name}`;
-          }
+          text = name;
         }
+      } else {
       }
 
-      if (text !== "") {
-        // @ts-ignore
-        leaf.tabHeaderInnerTitleEl.innerText = text;
-        // @ts-ignore
-        leaf.tabHeaderInnerTitleEl.innerHTML = text;
+      text = text === "" ? fm.uuid : text;
+
+      if (fm.type === 1) {
+        text = `(V) ${text}`;
+      } else if (fm.type === 2) {
+        text = `(N) ${text}`;
+      } else if (fm.type === 3) {
+        text = `(A) ${text}`;
+      } else {
       }
+
+     // @ts-ignore
+     leaf.tabHeaderInnerTitleEl.innerText = text;
+     // @ts-ignore
+     leaf.tabHeaderInnerTitleEl.innerHTML = text;
     }
   }
 
