@@ -33,6 +33,22 @@ import {
 // @ts-ignore
 import { Paths, Status, Types, Namespace, Default } from "./constants";
 
+const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const monthShort = [
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec",
+];
+
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
   mySetting: string;
