@@ -2369,19 +2369,17 @@ export class Generator {
     const dt = new Date();
     const note = {
       uuid: uuidv4(),
-      type: 2,
-      version: "0.0.3",
+      type: 3,
+      version: "0.0.6",
+      status: "todo",
       created_at: dt.toISOString(),
+      at: dt.toISOString(),
       path: "",
       data: "",
     };
 
-    note.path = `${Paths.Slipbox}/${note.uuid}.md`;
-    if (name === undefined) {
-      note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n## Content\n`;
-    } else {
-      note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n## Content\n### ${name}\n`;
-    }
+    note.path = `${Paths.Tasks}/${note.uuid}.md`;
+    note.data = `---\ntype: ${note.type}\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "${note.version}"\nstatus: "todo"\npriority: 0\nat: "${note.at}"\ntags: \n  - project/daily\n---\n## Task\n`;
 
     const f = this.app.vault.create(note.path, note.data).then((f) => {
       return f;

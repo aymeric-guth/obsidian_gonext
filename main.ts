@@ -628,6 +628,15 @@ export default class MyPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "generate-action",
+      name: "Generate Action",
+      // @ts-ignore
+      callback: () => {
+        this.generate.daily();
+      },
+    });
+
+    this.addCommand({
       id: "clippy-the-clipper",
       name: "Clippy Clip",
       // @ts-ignore
@@ -792,6 +801,7 @@ export default class MyPlugin extends Plugin {
     this.app.metadataCache.on(
       "changed",
       (file: TFile, data: string, cache: CachedMetadata) => {
+        console.log("on changed")
         if (Helper.isUUID(file.basename)) {
           this.vaultContentDict[file.basename] = file;
         }
@@ -828,6 +838,11 @@ export default class MyPlugin extends Plugin {
       }
 
       let text = "";
+
+      if (fm.type === undefined) {
+        console.warn(`type undefined for fm: ${fm}`)
+        return
+      }
 
       if (fm.type === 3 && Helper.getProject(fm) === "project/daily") {
         const at = new Date(fm.at);
