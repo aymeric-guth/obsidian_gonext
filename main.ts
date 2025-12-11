@@ -224,6 +224,7 @@ export default class MyPlugin extends Plugin {
     let targetName = undefined;
     const nameHeading = this.getResourceName(cache, start, end);
 
+
     const fm = cache.frontmatter;
 
     if (fm.alias !== undefined) {
@@ -395,33 +396,87 @@ export default class MyPlugin extends Plugin {
             const fm = new FrontmatterJS(page);
             const cache = this.getFileCacheFromUUID(fm.uuid);
             const [start, end] = this.getContentBoundaries(cache);
+
             if (start === 0 && end === 0) {
               return false;
             }
+
             const nameHeading = this.getResourceName(
               cache,
               start,
               end,
             );
-            // console.log(`nameHeading: ${nameHeading}`);
 
             if (nameHeading === undefined) {
               return false;
             }
+
             if (nameHeading !== nowIso) {
               return false;
             }
-            // this.getResourceName
+
             return true;
           });
 
         if (pages.length === 0) {
           // create permanent
           this.generate.permanent(nowIso);
-          return;
+        } else if (pages.length > 1) {
+          console.warn(`more than one occurence for ${nowIso}: ${pages.length}`)
+          this.openInNewTabIfNotOpened(pages[0]);
+        } else {
+          this.openInNewTabIfNotOpened(pages[0]);
         }
 
-        this.openInNewTabIfNotOpened(pages[0]);
+      },
+    });
+
+    this.addCommand({
+      id: "check-duplicates",
+      name: "Check for Duplicates",
+      // @ts-ignore
+      callback: () => {
+        const res = {};
+        // @ts-ignore
+        let i = 0;
+        const pages = this.dv.pages(`"${Paths.Slipbox}"`);
+        for (const page of pages) {
+          const fm = new FrontmatterJS(page);
+          const cache = this.getFileCacheFromUUID(fm.uuid);
+          const [start, end] = this.getContentBoundaries(cache);
+          const nameHeading = this.getResourceName(
+            cache,
+            start,
+            end,
+          );
+
+          if (nameHeading === undefined || nameHeading === "") {
+            continue;
+          }
+
+          // is not date format
+          if (nameHeading.length !== 10 || nameHeading[0] !== "2") {
+            continue;
+          }
+
+          if (res[nameHeading] === undefined || res[nameHeading] === null) {
+            res[nameHeading] = [fm.uuid];
+          } else {
+            res[nameHeading].push(fm.uuid);
+          }
+
+        }
+
+        const keys = Object.keys(res);
+        keys.sort();
+        for (const key of keys) {
+          if (res[key].length > 1) {
+            console.log(key);
+			for (const page of res[key]) {
+				console.log(`	${page}`);
+			}
+          }
+        }
       },
     });
 
@@ -801,7 +856,6 @@ export default class MyPlugin extends Plugin {
     this.app.metadataCache.on(
       "changed",
       (file: TFile, data: string, cache: CachedMetadata) => {
-        console.log("on changed")
         if (Helper.isUUID(file.basename)) {
           this.vaultContentDict[file.basename] = file;
         }
@@ -933,7 +987,7 @@ export default class MyPlugin extends Plugin {
       if (
         heading.level === 3 &&
         heading.position.start.offset > start &&
-        heading.position.end.offset < end
+        heading.position.end.offset <= end
       ) {
         resourceName = heading.heading;
         break;
