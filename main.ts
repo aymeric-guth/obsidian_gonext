@@ -218,25 +218,26 @@ export default class MyPlugin extends Plugin {
       return "";
     }
 
-    const [start, end] = this.getContentBoundaries(cache);
+		console.log(cache);
+		console.log();
+    // const [start, end] = this.getContentBoundaries(cache);
     // what is the naming preference?
     // alias > name heading
     let targetName = undefined;
-    const nameHeading = this.getResourceName(cache, start, end);
-
-
     const fm = cache.frontmatter;
 
-    if (fm.alias !== undefined) {
+	if (cache.headings.length > 0 && cache.headings[0].level === 1) {
+        targetName = cache.headings[0].heading;
+	} else if (fm.alias !== undefined) {
       if (Array.isArray(fm.alias) && fm.alias.length > 0) {
         // problem atheists?
         targetName = cache.frontmatter.alias[0];
       } else {
         targetName = cache.frontmatter.alias;
       }
-    } else {
-      targetName = nameHeading;
-    }
+	} else {
+        targetName = _id;
+	}
 
     const file = this.getFileFromUUID(_id);
     if (file === undefined) {
@@ -245,7 +246,7 @@ export default class MyPlugin extends Plugin {
     }
     const path = `${file.path.split("/").slice(0, -1)}/${_id}`;
 
-    return `[[${path}#${nameHeading}|${targetName}]]`;
+    return `[[${path}|${targetName}]]`;
   }
 
   getFileFromUUID(_id: string): TAbstractFile {
@@ -710,7 +711,6 @@ export default class MyPlugin extends Plugin {
           );
           const rootDir = file.path.split("/")[0];
           const authorized = [Paths.Slipbox, Paths.Refs];
-          if (rootDir !== undefined && authorized.contains(rootDir)) {
             const alias = this.grugAlias(_id);
             // navigator.clipboard.writeText(alias).then(() => {console.log("coucou, etc etc")});
             // @ts-ignore
@@ -722,12 +722,7 @@ export default class MyPlugin extends Plugin {
               const cursor = editor.getCursor();
               editor.replaceRange(alias, cursor);
             }
-          } else {
-            console.log(
-              `Does not work outside slibe-box, got ${file.path}`,
-            );
-            return;
-          }
+
         });
       },
     });
@@ -913,11 +908,24 @@ export default class MyPlugin extends Plugin {
             }
           }
         } else {
-          const [start, end] = this.getContentBoundaries(cache);
+          // const [start, end] = this.getContentBoundaries(cache);
           // what is the naming preference?
           // alias > name heading
-          const name = this.getResourceName(cache, start, end);
-          text = name;
+          // const name = this.getResourceName(cache, start, end);
+
+			if (cache.headings.length > 0 && cache.headings[0].level === 1) {
+		        text = cache.headings[0].heading;
+			} else if (fm.alias !== undefined) {
+		      if (Array.isArray(fm.alias) && fm.alias.length > 0) {
+		        // problem atheists?
+		        text = cache.frontmatter.alias[0];
+		      } else {
+		        text = cache.frontmatter.alias;
+		      }
+			} else {
+		        text = fm.uuid;
+			}
+		
         }
       } else {
       }

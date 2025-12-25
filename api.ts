@@ -3414,7 +3414,7 @@ export class ListMaker {
     return rs;
   }
 
-  planning(lastWeek = 2) {
+  planning(lastWeek = 1) {
     const rs = [];
     const pages = this.dv
       .pages(`"${Paths.Tasks}"`)
@@ -3431,7 +3431,6 @@ export class ListMaker {
         return true;
       })
       .sort((page) => page.file.frontmatter.at, "desc");
-
     const now = new Date();
     // const now = new Date("2024-12-31");
     const bins = {};
