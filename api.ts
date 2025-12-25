@@ -2272,7 +2272,7 @@ export class NoteHelper {
     const fm = note.file.frontmatter;
     let revisions = [];
     switch (fm.type) {
-      case Types.Permanent:
+      case Types.Permanena:
         revisions = revisionList(this.dv, Paths.Slipbox, note);
         break;
       case Types.Resource:
@@ -2409,7 +2409,7 @@ export class Generator {
     if (name === undefined) {
       note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n## Content\n`;
     } else {
-      note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n## Content\n### ${name}\n`;
+      note.data = `---\ntype: 2\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\nversion: "0.0.3"\n---\n# ${name}\n## Content\n`;
     }
 
     const f = this.app.vault.create(note.path, note.data).then((f) => {
