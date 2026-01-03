@@ -318,7 +318,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Index",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("INDEX.md");
+				this.openViewInNewTabIfNotOpened("DEUDEX.md");
 			},
 		});
 		this.addCommand({
