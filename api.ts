@@ -4,7 +4,6 @@ import {
 	Types,
 	Namespace,
 	Default,
-	GoalStatus,
 } from "./constants";
 import { v4 as uuidv4, v1 as uuidv1 } from "uuid";
 
@@ -14,19 +13,9 @@ export class FrontmatterJS {
 	public type: number;
 	public createdAt: Date;
 	public at: Date;
-	public before: Date;
-	public after: Date;
-	public components: string[];
-	public domains: string[];
-	public names: string[];
 	public projects: string[];
 	public fm;
-	public contents: string[];
-	public traits: string[];
-	public contexts: string[];
-	public status: string;
 	public f;
-	public energy: number;
 
 	singular(values: string[], field: string) {
 		if (!Helper.nilCheck(this.fm[field])) {
@@ -84,26 +73,7 @@ export class FrontmatterJS {
 		this.type = this.fm.type;
 		this.createdAt = new Date(this.fm.created_at);
 		this.at = this.fm.at !== undefined ? new Date(this.fm.at) : new Date();
-		this.before =
-			this.fm.before !== undefined
-				? new Date(this.fm.before)
-				: new Date();
-		this.after =
-			this.fm.after !== undefined ? new Date(this.fm.after) : new Date();
-		this.components = [];
-		this.domains = [];
-		this.projects = [];
-		this.contexts = [];
-		this.traits = [];
-		this.energy = this.fm.energy !== undefined ? this.fm.energy : 9;
-
-		const domains = [];
-		const components = [];
 		const projects = [];
-		const names = [];
-		const contexts = [];
-		const contents = [];
-		const traits = [];
 
 		if (!Helper.nilCheck(this.fm.tags)) {
 			if (!Array.isArray(this.fm.tags)) {
@@ -112,65 +82,16 @@ export class FrontmatterJS {
 			}
 
 			for (const tag of this.fm.tags) {
-				if (tag.slice(0, 7) === "domain/") {
-					domains.push(tag.slice(7));
-				} else if (tag.slice(0, 10) === "component/") {
-					components.push(tag.slice(10));
-				} else if (tag.slice(0, 8) === "project/") {
+				if (tag.slice(0, 8) === "project/") {
 					projects.push(tag.slice(8));
-				} else if (tag.slice(0, 5) === "name/") {
-					names.push(tag.slice(5));
-				} else if (tag.slice(0, 8) == "context/") {
-					contexts.push(tag.slice(8));
-				} else if (tag.slice(0, 8) == "content/") {
-					contents.push(tag.slice(8));
-				} else if (tag.slice(0, 6) == "trait/") {
-					traits.push(tag.slice(6));
 				}
 			}
 		}
 
-		this.singular(domains, "domain");
-		this.plural(domains, "domains");
-		this.singular(components, "components");
-		this.plural(components, "components");
 		this.singular(projects, "project");
 		this.plural(projects, "projects");
-		this.singular(contents, "contents");
-		this.plural(contents, "contents");
-		this.singular(names, "name");
-		this.plural(names, "names");
-		this.plural(names, "alias");
-		this.singular(traits, "trait");
-		this.plural(traits, "traits");
 
-		this.domains = domains;
-		this.components = components;
 		this.projects = projects;
-		this.names = names;
-		this.contexts = contexts;
-		this.contents = contents;
-		this.traits = traits;
-	}
-
-	getDomain(emptyDefault = true): string {
-		if (emptyDefault) {
-			return this.domains[0];
-		} else {
-			return this.domains[0] === undefined ? "unknown" : this.domains[0];
-		}
-	}
-
-	getDomains(): string[] {
-		return this.domains;
-	}
-
-	getTraits(): string[] {
-		return this.traits;
-	}
-
-	getComponents(): string[] {
-		return this.components;
 	}
 
 	getProject(emptyDefault = true): string {
@@ -183,34 +104,6 @@ export class FrontmatterJS {
 
 	getProjects(): string[] {
 		return this.projects;
-	}
-
-	getName(emptyDefault = true): string {
-		if (emptyDefault) {
-			return this.names[0];
-		} else {
-			return this.names[0] === undefined ? "" : this.names[0];
-		}
-	}
-
-	getContent(emptyDefault = true): string {
-		if (emptyDefault) {
-			return this.contents[0];
-		} else {
-			return this.contents[0] === undefined ? "" : this.contents[0];
-		}
-	}
-
-	getNames(): string[] {
-		return this.names;
-	}
-
-	getContext(emptyDefault = true): string {
-		if (emptyDefault) {
-			return this.contexts[0];
-		} else {
-			return this.contexts[0] === undefined ? "" : this.contexts[0];
-		}
 	}
 
 	resolve(dv) {
@@ -1147,208 +1040,4 @@ export class Generator {
 		});
 	}
 
-}
-
-export class ListMaker {
-	dv: any;
-	gonext: any;
-	frontmatter: Frontmatter;
-	noteHelper: NoteHelper;
-
-	constructor(gonext, dv, frontmatter) {
-		this.gonext = gonext;
-		this.dv = dv;
-		this.frontmatter = frontmatter;
-		this.noteHelper = new NoteHelper(gonext, dv, frontmatter);
-	}
-
-
-	planning(lastWeek = 1) {
-		const rs = [];
-		const pages = this.dv
-			.pages(`"${Paths.Tasks}"`)
-			.where((page) => {
-				const fm = new FrontmatterJS(page);
-				if (fm.at === undefined) {
-					return false;
-				}
-
-				return true;
-			})
-			.sort((page) => page.file.frontmatter.at, "desc");
-		const now = new Date();
-		// const now = new Date("2024-12-31");
-		const bins = {};
-		for (const page of pages) {
-			const fm = new FrontmatterJS(page);
-			let at = undefined;
-			try {
-				at = fm.at.toISOString().slice(0, 10);
-			} catch {
-				throw new Error(`Invalid date: '${fm.fm.uuid}'`);
-			}
-
-			const weekNumber = this.getWeekNumber5(fm.at);
-			if (fm.at.getFullYear() < now.getFullYear()) {
-				if (weekNumber > 1) {
-					continue;
-				}
-			}
-			// const weekNumber = this.getWeekNumber(fm.at);
-			if (bins[weekNumber] === undefined) {
-				bins[weekNumber] = [fm];
-			} else {
-				bins[weekNumber].push(fm);
-			}
-		}
-
-		const currentWeekNumber = this.getWeekNumber5(now);
-		// const currentWeekNumber = this.getWeekNumber(now);
-		for (const key of Object.keys(bins)) {
-			const weekNumber = Number(key);
-			if (weekNumber + lastWeek < currentWeekNumber) {
-				continue;
-			}
-			if (weekNumber < currentWeekNumber) {
-				rs.push(["header", 2, `~~week ${key}~~`]);
-			} else if (weekNumber === currentWeekNumber) {
-				rs.push(["header", 2, `*week ${key}*`]);
-			} else {
-				rs.push(["header", 2, `week ${key}`]);
-			}
-
-			bins[key].sort((a, b) => {
-				return a.at.getTime() - b.at.getTime();
-			});
-
-			for (const task of bins[key]) {
-				const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
-					task.at.getDay()
-				];
-				const text = Renderer.makeLink(
-					this.dv,
-					task.f,
-					`${task.at.toISOString().slice(0, 10)}, ${day}`,
-					"Task",
-				);
-
-				if (weekNumber < currentWeekNumber) {
-					rs.push(["paragraph", `~~${text}~~`]);
-				} else if (weekNumber === currentWeekNumber) {
-					if (this.dayOfYear(task.at) < this.dayOfYear(now)) {
-						rs.push(["paragraph", `~~${text}~~`]);
-					} else {
-						rs.push(["paragraph", `${text}`]);
-					}
-				} else {
-					rs.push(["paragraph", `${text}`]);
-				}
-			}
-		}
-
-		return rs;
-	}
-
-	dayOfYear(dt): number {
-		const year = dt.getFullYear();
-		const month = dt.getMonth() + 1;
-		const day = dt.getDate();
-
-		const N1 = Math.floor((275 * month) / 9);
-		const N2 = Math.floor((month + 9) / 12);
-		const N3 = 1 + Math.floor((year - 4 * Math.floor(year / 4) + 2) / 3);
-		return N1 - N2 * N3 + day - 30;
-	}
-
-	getWeekNumber(d) {
-		// Copy date so don't modify original
-		d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-		// Set to nearest Thursday: current date + 4 - current day number
-		// Make Sunday's day number 7
-		d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-		// Get first day of year
-		const yearStart: any = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-		// Calculate full weeks to nearest Thursday
-		return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-	}
-
-	// https://codepen.io/ldijkman/pen/LYdNJvM
-	getWeekNumber5(dt) {
-		// @ts-ignore
-		const tdt = new Date(dt.valueOf());
-		// const dayn = (dt.getDay() + 6) % 7;
-		const dayn = dt.getDay();
-		// @ts-ignore
-		tdt.setDate(tdt.getDate() - dayn + 3);
-		// @ts-ignore
-		const firstThursday = tdt.valueOf();
-		// @ts-ignore
-		tdt.setMonth(0, 1);
-		// @ts-ignore
-		if (tdt.getDay() !== 4) {
-			tdt.setMonth(0, 1 + ((4 - tdt.getDay() + 7) % 7));
-		}
-		// @ts-ignore
-		return 1 + Math.ceil((firstThursday - tdt) / 604800000);
-	}
-
-	getWeekNumber4(d) {
-		// @ts-ignore
-		d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-		// @ts-ignore
-		const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-		// @ts-ignore
-		const firstSunday =
-			yearStart.getUTCDay() === 0
-				? yearStart
-				: new Date(
-					Date.UTC(
-						d.getUTCFullYear(),
-						0,
-						1 + (7 - yearStart.getUTCDay()),
-					),
-				);
-		// @ts-ignore
-		const daysSinceFirstSunday = (d - firstSunday + 86400000) / 86400000;
-		// @ts-ignore
-		return Math.ceil(daysSinceFirstSunday / 7);
-	}
-
-	getMonth(year, weekNumber) {
-		// Create a date object for the first day of the year
-		const firstDayOfYear = new Date(year, 0, 1);
-
-		// Determine the day of the week for the first day of the year
-		const firstDayOfWeek = firstDayOfYear.getDay();
-
-		// Calculate the number of days to add to the first day of the year
-		// to get to the start of the specified week
-		// Weeks start on Monday; if the first day of the year is a Monday,
-		// no adjustment is needed, otherwise adjust to the next Monday
-		const daysToAdd =
-			(weekNumber - 1) * 7 -
-			firstDayOfWeek +
-			(firstDayOfWeek === 0 ? 1 : 0);
-
-		// Adjust the date to the start of the specified week
-		const weekStartDate = new Date(
-			firstDayOfYear.setDate(firstDayOfYear.getDate() + daysToAdd),
-		);
-
-		// Check if the weekStartDate is on the last day of the month,
-		// if so, move to the next month to round up for a week that spans a month transition
-		if (weekStartDate.getDate() > 24) {
-			weekStartDate.setDate(weekStartDate.getDate() + 7);
-		}
-
-		// Extract the month number (0-11 for Jan-Dec) from the weekStartDate
-		const monthNumber = weekStartDate.getMonth();
-
-		return monthNumber + 1; // Return month number (1-12)
-	}
-
-	getMonthName(monthNumber) {
-		const date = new Date(2000, monthNumber - 1); // Year 2000 is used arbitrarily; any non-leap year will do
-		return date.toLocaleString("default", { month: "long" });
-	}
 }

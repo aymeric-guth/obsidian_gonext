@@ -1,7 +1,5 @@
 // @ts-ignore
 import {
-	App,
-	Modal,
 	Plugin,
 	Workspace,
 	// @ts-ignore
@@ -11,27 +9,19 @@ import {
 	TFile,
 	TAbstractFile,
 } from "obsidian";
+import { v4 as uuidv4, v1 as uuidv1 } from "uuid";
 // @ts-ignore
 import {
 	Helper,
 	Frontmatter,
-	ListMaker,
-	// @ts-ignore
-	Namespace,
-	// @ts-ignore
-	Renderer,
-	// @ts-ignore
-	AutoField,
 	// @ts-ignore
 	FrontmatterJS,
-	DvLib,
 	// @ts-ignore
-	Generator,
 	// @ts-ignore
 	Assert,
 } from "./api";
 // @ts-ignore
-import { Paths, Status, Types, Namespace, Default } from "./constants";
+import { Paths, Default } from "./constants";
 
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShort = [
@@ -68,9 +58,6 @@ export default class MyPlugin extends Plugin {
 	debug: boolean;
 	taskInStatusBar: HTMLElement;
 	api: any;
-	listMaker: ListMaker;
-	frontmatter: Frontmatter;
-	generate: Generator;
 	vaultContent: TFile[] = [];
 	vaultContentDict: { [id: string]: TFile } = {};
 
@@ -81,7 +68,7 @@ export default class MyPlugin extends Plugin {
 			return;
 		}
 
-		const active = this.app.workspace.activeLeaf;
+		const active = this.app.workspace.getLeaf();
 		// @ts-ignore
 		const root = active.parent;
 		// rechercher si pas déja ouvert dans les onglets actifs
@@ -114,53 +101,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		node.openFile(f, {
-			active: true,
-		});
-	}
-
-	openInNewTabIfNotOpened(page) {
-		const active = this.app.workspace.activeLeaf;
-		// @ts-ignore
-		const root = active.parent;
-		// rechercher si pas déja ouvert dans les onglets actifs
-		// sinon créer un nouvel onglet, ouvrir le fichier, et en faire l'onglet actif
-		let found = false;
-		let node = undefined;
-		const emptyTabs = [];
-
-		for (const leaf of root.children) {
-			const file = this.getFileCacheFromLeaf(leaf);
-			if (file === undefined || file === null) {
-				emptyTabs.push(leaf);
-				continue;
-			}
-
-			if (
-				file.frontmatter !== undefined &&
-				file.frontmatter.uuid === page.file.frontmatter.uuid
-			) {
-				found = true;
-				node = leaf;
-				break;
-			}
-		}
-
-		if (!found) {
-			if (emptyTabs.length > 0) {
-				node = emptyTabs[0];
-			} else {
-				this.app.workspace.createLeafInParent(
-					root,
-					root.children.length + 1,
-				);
-				node = root.children[root.children.length - 1];
-			}
-		}
-
-		node.openFile(this.app.vault.getAbstractFileByPath(page.file.path), {
-			active: true,
-		});
+		node.openFile(f, { active: true, });
 	}
 
 	getFileCacheFromLeaf(leaf): CachedMetadata {
@@ -270,17 +211,11 @@ export default class MyPlugin extends Plugin {
 		this.dv = this.app.plugins.plugins.dataview.api;
 		// @ts-ignore
 		this.frontmatter = new Frontmatter(this);
-		this.listMaker = new ListMaker(this, this.dv, this.frontmatter);
-		this.generate = new Generator(this.app);
 		// @ts-ignore
 		this.files = {};
 
 		this.api = {
-			namespace: Namespace,
 			default: Default,
-			frontmatter: this.frontmatter,
-			listMaker: this.listMaker,
-			renderer: Renderer,
 			FrontmatterJS: FrontmatterJS,
 		};
 
@@ -331,6 +266,7 @@ export default class MyPlugin extends Plugin {
 				shell.showItemInFolder(assetPath);
 			},
 		});
+
 		this.addCommand({
 			id: "open-index",
 			name: "Open Index",
@@ -339,6 +275,7 @@ export default class MyPlugin extends Plugin {
 				this.openViewInNewTabIfNotOpened("Notes/eec0a297-982c-471c-9748-4943ec45fe94.md");
 			},
 		});
+
 		this.addCommand({
 			id: "open-inbox",
 			name: "Open Inbox",
@@ -347,14 +284,16 @@ export default class MyPlugin extends Plugin {
 				this.openViewInNewTabIfNotOpened("Notes/8c7aad2a-b67f-44b7-86fd-27a50410be65.md");
 			},
 		});
+
 		this.addCommand({
-			id: "open-planning",
-			name: "Open Planning",
+			id: "open-calendar",
+			name: "Open Calendar",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Planning.md");
+				this.openViewInNewTabIfNotOpened("Notes/d371e0f9-1a7f-4cd0-8fa4-260c176da4a4.md");
 			},
 		});
+
 		this.addCommand({
 			id: "open-next_actions",
 			name: "Open Next Actions",
@@ -363,6 +302,7 @@ export default class MyPlugin extends Plugin {
 				this.openViewInNewTabIfNotOpened("Notes/ab7aec92-2273-40bc-9632-da70937b5575.md");
 			},
 		});
+
 		this.addCommand({
 			id: "open-someday_maybe",
 			name: "Open Someday Maybe",
@@ -371,6 +311,7 @@ export default class MyPlugin extends Plugin {
 				this.openViewInNewTabIfNotOpened("Notes/e7b605b9-4d3a-4c17-bf4e-e7f1a51f7a30.md");
 			},
 		});
+
 		this.addCommand({
 			id: "open-waiting_for",
 			name: "Open Waiting For",
@@ -379,6 +320,7 @@ export default class MyPlugin extends Plugin {
 				this.openViewInNewTabIfNotOpened("Notes/7a13d7ac-732b-4cec-91f0-1498c824b82e.md");
 			},
 		});
+
 		this.addCommand({
 			id: "open-todays-log",
 			name: "Open Today's Logs",
@@ -387,36 +329,12 @@ export default class MyPlugin extends Plugin {
 				const now = new Date();
 				const nowIso = now.toISOString().slice(0, 10);
 				// @ts-ignore
-				const pages = this.dv
-					.pages(`"${Paths.Slipbox}"`)
-					.where((page) => {
-						const fm = new FrontmatterJS(page);
-						const cache = this.getFileCacheFromUUID(fm.uuid);
-
-						const nameHeading = this.getResourceName(cache);
-						if (nameHeading === undefined) {
-							return false;
-						}
-
-						if (nameHeading !== nowIso) {
-							return false;
-						}
-
-						return true;
-					});
-
-				if (pages.length === 0) {
-					// create permanent
+				if (!this.loadNoteNamed(nowIso)) {
 					this.generate.note(nowIso);
-				} else if (pages.length > 1) {
-					console.warn(`more than one occurence for ${nowIso}: ${pages.length}`)
-					this.openInNewTabIfNotOpened(pages[0]);
-				} else {
-					this.openInNewTabIfNotOpened(pages[0]);
 				}
-
 			},
 		});
+
 		this.addCommand({
 			id: "check-duplicates",
 			name: "Check for Duplicates",
@@ -471,30 +389,7 @@ export default class MyPlugin extends Plugin {
 				const now = new Date();
 				now.setDate(now.getDate() - 1);
 				const nowIso = now.toISOString().slice(0, 10);
-				// @ts-ignore
-				const pages = this.dv
-					.pages(`"${Paths.Slipbox}"`)
-					.where((page) => {
-						const fm = new FrontmatterJS(page);
-						const cache = this.getFileCacheFromUUID(fm.uuid);
-						const nameHeading = this.getResourceName(
-							cache,
-						);
-						if (nameHeading === undefined) {
-							return false;
-						}
-						if (nameHeading !== nowIso) {
-							return false;
-						}
-						// this.getResourceName
-						return true;
-					});
-
-				if (pages.length === 0) {
-					return;
-				}
-
-				this.openInNewTabIfNotOpened(pages[0]);
+				this.loadNoteNamed(nowIso);
 			},
 		});
 
@@ -505,40 +400,7 @@ export default class MyPlugin extends Plugin {
 			callback: () => {
 				const now = new Date();
 				const nowIso = now.toISOString().slice(0, 10);
-				// @ts-ignore
-				const pages = this.dv
-					.pages(`"${Paths.Tasks}"`)
-					.where((page) => {
-						if (page.file.frontmatter.at === undefined) {
-							return false;
-						}
-
-						// assign now si at === undefined
-						const fm = new FrontmatterJS(page);
-						if (fm.getProject() !== "daily") {
-							return false;
-						}
-
-						let fmIso = undefined;
-						try {
-							fmIso = fm.at.toISOString().slice(0, 10);
-						} catch {
-							console.warn(`possible invalid data in ${fm.uuid}`);
-							return false;
-						}
-
-						if (fmIso === nowIso) {
-							return true;
-						}
-
-						return false;
-					});
-
-				if (pages.length === 0) {
-					return;
-				}
-
-				this.openInNewTabIfNotOpened(pages[0]);
+				this.loadActionNamed(nowIso);
 			},
 		});
 
@@ -550,41 +412,7 @@ export default class MyPlugin extends Plugin {
 				const now = new Date();
 				now.setDate(now.getDate() + 1);
 				const nowIso = now.toISOString().slice(0, 10);
-				// @ts-ignore
-
-				const pages = this.dv
-					.pages(`"${Paths.Tasks}"`)
-					.where((page) => {
-						if (page.file.frontmatter.at === undefined) {
-							return false;
-						}
-
-						// assign now si at === undefined
-						const fm = new FrontmatterJS(page);
-						if (fm.getProject() !== "daily") {
-							return false;
-						}
-
-						let fmIso = undefined;
-						try {
-							fmIso = fm.at.toISOString().slice(0, 10);
-						} catch {
-							console.warn(`possible invalid data in ${fm.uuid}`);
-							return false;
-						}
-
-						if (fmIso === nowIso) {
-							return true;
-						}
-
-						return false;
-					});
-
-				if (pages.length === 0) {
-					return;
-				}
-
-				this.openInNewTabIfNotOpened(pages[0]);
+				this.loadActionNamed(nowIso);
 			},
 		});
 
@@ -596,41 +424,7 @@ export default class MyPlugin extends Plugin {
 				const now = new Date();
 				now.setDate(now.getDate() - 1);
 				const nowIso = now.toISOString().slice(0, 10);
-				// @ts-ignore
-
-				const pages = this.dv
-					.pages(`"${Paths.Tasks}"`)
-					.where((page) => {
-						if (page.file.frontmatter.at === undefined) {
-							return false;
-						}
-
-						// assign now si at === undefined
-						const fm = new FrontmatterJS(page);
-						if (fm.getProject() !== "daily") {
-							return false;
-						}
-
-						let fmIso = undefined;
-						try {
-							fmIso = fm.at.toISOString().slice(0, 10);
-						} catch {
-							console.warn(`possible invalid data in ${fm.uuid}`);
-							return false;
-						}
-
-						if (fmIso === nowIso) {
-							return true;
-						}
-
-						return false;
-					});
-
-				if (pages.length === 0) {
-					return;
-				}
-
-				this.openInNewTabIfNotOpened(pages[0]);
+				this.loadActionNamed(nowIso);
 			},
 		});
 
@@ -639,7 +433,7 @@ export default class MyPlugin extends Plugin {
 			name: "Generate Note",
 			// @ts-ignore
 			callback: () => {
-				this.generate.note();
+				this.note();
 			},
 		});
 
@@ -648,7 +442,7 @@ export default class MyPlugin extends Plugin {
 			name: "Generate Verbatim",
 			// @ts-ignore
 			callback: () => {
-				this.generate.verbatim();
+				this.verbatim();
 			},
 		});
 
@@ -657,7 +451,7 @@ export default class MyPlugin extends Plugin {
 			name: "Generate Action",
 			// @ts-ignore
 			callback: () => {
-				this.generate.action();
+				this.action();
 			},
 		});
 
@@ -691,7 +485,6 @@ export default class MyPlugin extends Plugin {
 						const cursor = editor.getCursor();
 						editor.replaceRange(alias, cursor);
 					}
-
 				});
 			},
 		});
@@ -927,6 +720,45 @@ export default class MyPlugin extends Plugin {
 
 	}
 
+	loadResourceNamed(name: string, path: string): boolean {
+		const pages = this.dv
+			.pages(`"${path}"`)
+			.where((page) => {
+				const uuid = page.file.name;
+				const cache = this.getFileCacheFromUUID(uuid);
+				const nameHeading = this.getResourceName(cache);
+
+				if (nameHeading === undefined) {
+					return false;
+				}
+
+				if (nameHeading !== name) {
+					return false;
+				}
+
+				return true;
+			});
+
+		if (pages.length === 0) {
+			return;
+		}
+
+		if (pages.length === 0) {
+			return false;
+		} else {
+			this.openViewInNewTabIfNotOpened(`${path}/${pages[0].file.name}.md`);
+			return true;
+		}
+	}
+
+	loadActionNamed(name: string): boolean {
+		return this.loadResourceNamed(name, Paths.Actions);
+	}
+
+	loadNoteNamed(name: string): boolean {
+		return this.loadResourceNamed(name, Paths.Notes);
+	}
+
 	onunload() {
 		console.log("gonext - onunload()");
 		// @ts-ignore
@@ -943,5 +775,90 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	action() {
+		const dt = new Date();
+		const note = {
+			uuid: uuidv4(),
+			created_at: dt.toISOString(),
+			path: "",
+			data: "",
+		};
+
+		note.path = `${Paths.Tasks}/${note.uuid}.md`;
+		note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# \n## content\n`;
+
+		const f = this.app.vault.create(note.path, note.data).then((f) => {
+			return f;
+		});
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		this.app.workspace.createLeafInParent(root, root.children.length + 1);
+		const leaf = root.children[root.children.length - 1];
+		f.then((file) => {
+			leaf.openFile(file, { active: true });
+		});
+	}
+
+	verbatim(name?: string) {
+		const dt = new Date();
+		const note = {
+			uuid: uuidv4(),
+			created_at: dt.toISOString(),
+			path: "",
+			data: "",
+		};
+
+		note.path = `${Paths.Verbatim}/${note.uuid}.md`;
+		note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# ${name}\n## Content\n`;
+
+		if (name === undefined) {
+			note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# \n## Content\n`;
+		} else {
+			note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# ${name}\n## Content\n`;
+		}
+
+		const f = this.app.vault.create(note.path, note.data).then((f) => {
+			return f;
+		});
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		this.app.workspace.createLeafInParent(root, root.children.length + 1);
+		const leaf = root.children[root.children.length - 1];
+		f.then((file) => {
+			leaf.openFile(file, { active: true });
+		});
+	}
+
+	note(name?: string) {
+		const dt = new Date();
+		const note = {
+			uuid: uuidv4(),
+			created_at: dt.toISOString(),
+			path: "",
+			data: "",
+		};
+
+		note.path = `${Paths.Slipbox}/${note.uuid}.md`;
+		if (name === undefined) {
+			note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# \n## Content\n`;
+		} else {
+			note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# ${name}\n## Content\n`;
+		}
+
+		const f = this.app.vault.create(note.path, note.data).then((f) => {
+			return f;
+		});
+		const active = this.app.workspace.activeLeaf;
+		// @ts-ignore
+		const root = active.parent;
+		this.app.workspace.createLeafInParent(root, root.children.length + 1);
+		const leaf = root.children[root.children.length - 1];
+		f.then((file) => {
+			leaf.openFile(file, { active: true });
+		});
 	}
 }

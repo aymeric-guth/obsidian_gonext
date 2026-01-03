@@ -1,7 +1,9 @@
 export const Paths = {
+	Actions: "Actions",
+	Notes: "Notes",
+	Verbatim: "Verbatim",
+	Assets: "Assets",
 	Tasks: "Actions",
-	Components: "Components",
-	Goals: "Goals",
 	Slipbox: "Notes",
 	Inbox: "800 Inbox",
 	Refs: "802 Refs",
@@ -12,9 +14,7 @@ export const Paths = {
 	Resources: "Resources",
 	Projects: "100 Projects",
 	Domains: "Domains",
-	Names: "Names",
-	Verbatim: "Verbatim",
-	Assets: "Assets"
+	Names: "Names"
 };
 
 export const Status = {
