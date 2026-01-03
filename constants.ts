@@ -13,6 +13,8 @@ export const Paths = {
 	Projects: "100 Projects",
 	Domains: "Domains",
 	Names: "Names",
+	Verbatim: "Verbatim",
+	Assets: "Assets"
 };
 
 export const Status = {

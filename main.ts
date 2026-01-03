@@ -75,7 +75,7 @@ export default class MyPlugin extends Plugin {
 	vaultContentDict: { [id: string]: TFile } = {};
 
 	openViewInNewTabIfNotOpened(name: string) {
-		const f = app.vault.getAbstractFileByPath(name);
+		const f = this.app.vault.getAbstractFileByPath(name);
 		if (f === undefined || f === null) {
 			console.warn(`file not found ${name}`);
 			return;
@@ -175,9 +175,9 @@ export default class MyPlugin extends Plugin {
 			return undefined;
 		}
 		// @ts-ignore
-		const abstractPath = app.vault.getAbstractFileByPath(file);
+		const abstractPath = this.app.vault.getAbstractFileByPath(file);
 		// @ts-ignore
-		return app.metadataCache.getFileCache(abstractPath);
+		return this.app.metadataCache.getFileCache(abstractPath);
 	}
 
 	getFileFromLeaf(leaf): TAbstractFile {
@@ -220,7 +220,6 @@ export default class MyPlugin extends Plugin {
 
 		console.log(cache);
 		console.log();
-		// const [start, end] = this.getContentBoundaries(cache);
 		// what is the naming preference?
 		// alias > name heading
 		let targetName = undefined;
@@ -259,7 +258,7 @@ export default class MyPlugin extends Plugin {
 			return undefined;
 		}
 
-		return app.metadataCache.getFileCache(f);
+		return this.app.metadataCache.getFileCache(f);
 	}
 
 	async onload() {
@@ -277,23 +276,11 @@ export default class MyPlugin extends Plugin {
 		this.files = {};
 
 		this.api = {
-			getArea: Helper.getArea,
-			getContext: Helper.getContext,
-			getDomain: Helper.getDomain,
-			getLayer: Helper.getLayer,
-			getOrg: Helper.getOrg,
-			getProject: Helper.getProject,
-			durationStringToSec: Helper.durationStringToSec,
-			paths: Paths,
-			types: Types,
-			status: Status,
 			namespace: Namespace,
 			default: Default,
 			frontmatter: this.frontmatter,
 			listMaker: this.listMaker,
 			renderer: Renderer,
-			autoField: AutoField,
-			dvLib: new DvLib(),
 			FrontmatterJS: FrontmatterJS,
 		};
 
@@ -309,16 +296,47 @@ export default class MyPlugin extends Plugin {
 			`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="currentColor" d="M20 12V2h2v10zm4 0V2h2v10zm4 0V2h2v10zm-12 8a3.912 3.912 0 0 1-4-4a3.912 3.912 0 0 1 4-4v-2a6 6 0 1 0 6 6h-2a3.912 3.912 0 0 1-4 4"></path><path fill="currentColor" d="M28.893 18.454L26.098 16l-1.318 1.504l2.792 2.452l-2.36 4.088l-3.427-1.16a9.032 9.032 0 0 1-2.714 1.565L18.36 28h-4.72l-.71-3.55a9.095 9.095 0 0 1-2.695-1.572l-3.447 1.166l-2.36-4.088l2.725-2.395a8.926 8.926 0 0 1-.007-3.128l-2.718-2.39l2.36-4.087l3.427 1.16A9.03 9.03 0 0 1 12.93 7.55L13.64 4H16V2h-2.36a2 2 0 0 0-1.961 1.608l-.504 2.519a10.967 10.967 0 0 0-1.327.753l-2.42-.819a1.998 1.998 0 0 0-2.372.895l-2.36 4.088a2 2 0 0 0 .411 2.502l1.931 1.697C5.021 15.495 5 15.745 5 16c0 .258.01.513.028.766l-1.92 1.688a2 2 0 0 0-.413 2.502l2.36 4.088a1.998 1.998 0 0 0 2.374.895l2.434-.824a10.974 10.974 0 0 0 1.312.759l.503 2.518A2 2 0 0 0 13.64 30h4.72a2 2 0 0 0 1.961-1.608l.504-2.519a10.967 10.967 0 0 0 1.327-.753l2.419.818a1.998 1.998 0 0 0 2.373-.894l2.36-4.088a2 2 0 0 0-.411-2.502"></path></svg>`,
 		);
 
-		// this.addRibbonIcon("GoNextIcon", "[g]o[n]ext", async () => {
-		//   this.generate.fleeting();
-		// });
 
+		this.addCommand({
+			id: "open-assets",
+			name: "Open Assets",
+			// @ts-ignore
+			callback: async () => {
+				const leaf = this.app.workspace.getLeaf();
+				const file = this.getFileFromLeaf(leaf);
+				const cache = this.getFileCacheFromLeaf(leaf);
+				const adapter = this.app.vault.adapter;
+				const vaultDir = adapter.basePath;
+
+				const fm = cache.frontmatter;
+				if (fm === undefined) {
+					console.log(`file does not have a frontmatter: ${file.path}`);
+					return;
+				}
+				// console.log(fm)
+
+				const uuid = fm.uuid;
+				if (uuid === undefined) {
+					console.log(`file does not have a uuid: ${file.path}`);
+					return;
+				}
+
+				if (!await adapter.exists(`${Paths.Assets}/${uuid}/`)) {
+					await this.app.vault.adapter.mkdir(`${Paths.Assets}/${uuid}/`);
+				}
+
+				const assetPath = `${vaultDir}/${Paths.Assets}/${uuid}/`;
+				console.log(assetPath);
+				const { shell } = require("electron");
+				shell.showItemInFolder(assetPath);
+			},
+		});
 		this.addCommand({
 			id: "open-index",
 			name: "Open Index",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("DEUDEX.md");
+				this.openViewInNewTabIfNotOpened("Notes/eec0a297-982c-471c-9748-4943ec45fe94.md");
 			},
 		});
 		this.addCommand({
@@ -326,18 +344,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Inbox",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("INBOX.md");
-				// app.commands.executeCommandById('markdown:toggle-preview');
-			},
-		});
-		this.addCommand({
-			id: "open-projects",
-			name: "Open Projects",
-			// @ts-ignore
-			callback: () => {
-				this.openViewInNewTabIfNotOpened(
-					"803 Slipbox/664dc855-eabe-40dc-90b8-006223457953.md",
-				);
+				this.openViewInNewTabIfNotOpened("Notes/8c7aad2a-b67f-44b7-86fd-27a50410be65.md");
 			},
 		});
 		this.addCommand({
@@ -349,21 +356,11 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 		this.addCommand({
-			id: "open-journal",
-			name: "Open Journal",
-			// @ts-ignore
-			callback: () => {
-				this.openViewInNewTabIfNotOpened(
-					"803 Slipbox/67fb49c2-05d1-48be-98ce-27b269660957.md",
-				);
-			},
-		});
-		this.addCommand({
 			id: "open-next_actions",
 			name: "Open Next Actions",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("NEXT ACTIONS.md");
+				this.openViewInNewTabIfNotOpened("Notes/ab7aec92-2273-40bc-9632-da70937b5575.md");
 			},
 		});
 		this.addCommand({
@@ -371,7 +368,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Someday Maybe",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("SOMEDAY MAYBE.md");
+				this.openViewInNewTabIfNotOpened("Notes/e7b605b9-4d3a-4c17-bf4e-e7f1a51f7a30.md");
 			},
 		});
 		this.addCommand({
@@ -379,10 +376,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Waiting For",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("WAITING FOR.md");
+				this.openViewInNewTabIfNotOpened("Notes/7a13d7ac-732b-4cec-91f0-1498c824b82e.md");
 			},
 		});
-
 		this.addCommand({
 			id: "open-todays-log",
 			name: "Open Today's Logs",
@@ -411,7 +407,7 @@ export default class MyPlugin extends Plugin {
 
 				if (pages.length === 0) {
 					// create permanent
-					this.generate.permanent(nowIso);
+					this.generate.note(nowIso);
 				} else if (pages.length > 1) {
 					console.warn(`more than one occurence for ${nowIso}: ${pages.length}`)
 					this.openInNewTabIfNotOpened(pages[0]);
@@ -421,7 +417,6 @@ export default class MyPlugin extends Plugin {
 
 			},
 		});
-
 		this.addCommand({
 			id: "check-duplicates",
 			name: "Check for Duplicates",
@@ -434,7 +429,6 @@ export default class MyPlugin extends Plugin {
 				for (const page of pages) {
 					const fm = new FrontmatterJS(page);
 					const cache = this.getFileCacheFromUUID(fm.uuid);
-					const [start, end] = this.getContentBoundaries(cache);
 					const nameHeading = this.getResourceName(
 						cache,
 					);
@@ -483,10 +477,6 @@ export default class MyPlugin extends Plugin {
 					.where((page) => {
 						const fm = new FrontmatterJS(page);
 						const cache = this.getFileCacheFromUUID(fm.uuid);
-						const [start, end] = this.getContentBoundaries(cache);
-						if (start === 0 && end === 0) {
-							return false;
-						}
 						const nameHeading = this.getResourceName(
 							cache,
 						);
@@ -505,22 +495,6 @@ export default class MyPlugin extends Plugin {
 				}
 
 				this.openInNewTabIfNotOpened(pages[0]);
-			},
-		});
-
-		this.addCommand({
-			id: "list-index-content",
-			name: "List Index Content",
-			// @ts-ignore
-			callback: () => {
-				// @ts-ignore
-				const abstractPath =
-					this.app.vault.getAbstractFileByPath("INDEX.md");
-				// @ts-ignore
-				const cache = this.app.metadataCache.getFileCache(abstractPath);
-				for (const link of cache.links) {
-					console.log(link.displayText);
-				}
 			},
 		});
 
@@ -665,7 +639,16 @@ export default class MyPlugin extends Plugin {
 			name: "Generate Note",
 			// @ts-ignore
 			callback: () => {
-				this.generate.permanent();
+				this.generate.note();
+			},
+		});
+
+		this.addCommand({
+			id: "generate-verbatim",
+			name: "Generate Verbatim",
+			// @ts-ignore
+			callback: () => {
+				this.generate.verbatim();
 			},
 		});
 
@@ -674,7 +657,7 @@ export default class MyPlugin extends Plugin {
 			name: "Generate Action",
 			// @ts-ignore
 			callback: () => {
-				this.generate.daily();
+				this.generate.action();
 			},
 		});
 
@@ -713,6 +696,31 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "copy-uuid",
+			name: "Copy UUID",
+			// @ts-ignore
+			callback: async () => {
+				const leaf = this.app.workspace.getLeaf();
+				const file = this.getFileFromLeaf(leaf);
+				const cache = this.getFileCacheFromLeaf(leaf);
+				const fm = cache.frontmatter;
+				if (fm === undefined) {
+					console.log(`file does not have a frontmatter: ${file.path}`);
+					return;
+				}
+
+				const uuid = fm.uuid;
+				if (uuid === undefined) {
+					console.log(`file does not have a uuid: ${file.path}`);
+					return;
+				}
+
+				if (["Verbatim", "Notes", "Actions"].contains(file.parent.name)) {
+					await navigator.clipboard.writeText(String(cache.frontmatter.uuid));
+				}
+			},
+		});
 		this.addCommand({
 			id: "safe-delete",
 			name: "Safe Delete",
@@ -856,7 +864,7 @@ export default class MyPlugin extends Plugin {
 
 	sneakyTabRenamer(app) {
 		// @ts-ignore
-		const root = app.workspace.getLeaf().parent;
+		const root = this.app.workspace.getLeaf().parent;
 
 		for (const leaf of root.children) {
 			const file = leaf.view.file;
@@ -865,7 +873,7 @@ export default class MyPlugin extends Plugin {
 			}
 
 			// @ts-ignore
-			const cache = app.metadataCache.getFileCache(file);
+			const cache = this.app.metadataCache.getFileCache(file);
 			// @ts-ignore
 			const fm = cache.frontmatter;
 			if (fm === undefined) {
@@ -873,58 +881,24 @@ export default class MyPlugin extends Plugin {
 			}
 
 			let text = "";
-
-			if (fm.type === undefined) {
-				console.warn(`type undefined for fm: ${fm}`)
-				return
-			}
-
-			if (fm.type === 3 && Helper.getProject(fm) === "project/daily") {
+			if (file.parent.name === "Actions") {
 				const at = new Date(fm.at);
-				text = `${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
-			} else if (fm.type === 2 || fm.type === 1) {
-				if (!Helper.nilCheck(fm.alias)) {
-					if (typeof (fm.alias) === "string") {
-						text = fm.alias;
-					} else {
-						for (const alias of fm.alias) {
-							if (text.length === 0 || alias.length < text.length) {
-								text = alias;
-							}
-						}
-					}
+				text = `(A) ${dayShort[at.getDay()]}. ${at.getDate()} ${monthShort[at.getMonth()]}`;
+			} else if (file.parent.name === "Notes") {
+				if (cache.headings.length > 0 && cache.headings[0].level === 1) {
+					text = `(N) ${cache.headings[0].heading}`;
 				} else {
-					// const [start, end] = this.getContentBoundaries(cache);
-					// what is the naming preference?
-					// alias > name heading
-					// const name = this.getResourceName(cache, start, end);
-
-					if (cache.headings.length > 0 && cache.headings[0].level === 1) {
-						text = cache.headings[0].heading;
-					} else if (fm.alias !== undefined) {
-						if (Array.isArray(fm.alias) && fm.alias.length > 0) {
-							// problem atheists?
-							text = cache.frontmatter.alias[0];
-						} else {
-							text = cache.frontmatter.alias;
-						}
-					} else {
-						text = fm.uuid;
-					}
-
+					text = `(N) ${fm.uuid}`;
+				}
+			} else if (file.parent.name === "Verbatim") {
+				if (cache.headings.length > 0 && cache.headings[0].level === 1) {
+					text = `(V) ${cache.headings[0].heading}`;
+				} else {
+					text = `(V) ${fm.uuid}`;
 				}
 			} else {
-			}
-
-			text = text === "" ? fm.uuid : text;
-
-			if (fm.type === 1) {
-				text = `(V) ${text}`;
-			} else if (fm.type === 2) {
-				text = `(N) ${text}`;
-			} else if (fm.type === 3) {
-				text = `(A) ${text}`;
-			} else {
+				console.warn(`type undefined for fm: ${fm}`)
+				return
 			}
 
 			// @ts-ignore
@@ -932,45 +906,6 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			leaf.tabHeaderInnerTitleEl.innerHTML = text;
 		}
-	}
-
-	getContentBoundaries(note: CachedMetadata) {
-		// locate content offset
-		let fm = undefined;
-		try {
-			fm = note.frontmatter;
-		} catch {
-			return [0, 0];
-		}
-		let found = false;
-		let start = 0;
-		let end = 0;
-
-		for (const heading of note.headings) {
-			if (
-				heading.level === 2 &&
-				heading.heading.toLowerCase() === "content"
-			) {
-				found = true;
-				start = heading.position.end.offset;
-				continue;
-			}
-			// s'il y a un autre heading level 2 apres, end = start.offset
-			if (
-				found &&
-				heading.level === 2 &&
-				heading.heading.toLowerCase() !== "content"
-			) {
-				end = heading.position.start.offset;
-			}
-		}
-		Assert.True(found, `Resource does not declares content: ${fm.uuid}`);
-		// sinon end = end document
-		if (end === 0) {
-			end = note.sections[note.sections.length - 1].position.end.offset;
-		}
-
-		return [start, end];
 	}
 
 	getResourceName(cache: CachedMetadata): string {
