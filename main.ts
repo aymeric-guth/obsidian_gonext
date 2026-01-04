@@ -10,18 +10,6 @@ import {
 	TAbstractFile,
 } from "obsidian";
 import { v4 as uuidv4, v1 as uuidv1 } from "uuid";
-// @ts-ignore
-import {
-	Helper,
-	Frontmatter,
-	// @ts-ignore
-	FrontmatterJS,
-	// @ts-ignore
-	// @ts-ignore
-	Assert,
-} from "./api";
-// @ts-ignore
-import { Paths, Default } from "./constants";
 
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShort = [
@@ -210,14 +198,9 @@ export default class MyPlugin extends Plugin {
 		// @ts-ignore
 		this.dv = this.app.plugins.plugins.dataview.api;
 		// @ts-ignore
-		this.frontmatter = new Frontmatter(this);
-		// @ts-ignore
 		this.files = {};
 
-		this.api = {
-			default: Default,
-			FrontmatterJS: FrontmatterJS,
-		};
+		this.api = {};
 
 		// @ts-ignore
 		window.gonext = {
@@ -241,6 +224,7 @@ export default class MyPlugin extends Plugin {
 				const file = this.getFileFromLeaf(leaf);
 				const cache = this.getFileCacheFromLeaf(leaf);
 				const adapter = this.app.vault.adapter;
+				// @ts-ignore
 				const vaultDir = adapter.basePath;
 
 				const fm = cache.frontmatter;
@@ -286,8 +270,8 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "open-calendar",
-			name: "Open Calendar",
+			id: "open-planning",
+			name: "Open Planning",
 			// @ts-ignore
 			callback: () => {
 				this.openViewInNewTabIfNotOpened("Notes/d371e0f9-1a7f-4cd0-8fa4-260c176da4a4.md");
@@ -330,7 +314,68 @@ export default class MyPlugin extends Plugin {
 				const nowIso = now.toISOString().slice(0, 10);
 				// @ts-ignore
 				if (!this.loadNoteNamed(nowIso)) {
-					this.generate.note(nowIso);
+					this.note(nowIso);
+				}
+			},
+		});
+
+
+		// link brut -> path
+		// link sous forme indeterminé
+		this.addCommand({
+			id: "list-orphaned",
+			name: "List Orphaned",
+			// @ts-ignore
+			callback: async () => {
+				const files = this.app.vault.getFiles();
+				const links = {}
+				const r = [];
+				let i = 0;
+				let failed = 0;
+
+				for (const f of files) {
+					links[f.path] = 0;
+				}
+
+				// app.metadataCache.getLinks()
+				// app.metadataCache.linkResolverQueue
+				// app.metadataCache.linkResolver
+				// app.metadataCache.resolveLink
+				// app.metadataCache.fileToLinkText
+				// app.metadataCache.getLinkPathDest
+				// app.metadataCache.getFirstLinkPathDest
+				//
+				// app.metadataCache.getBacklinksForFile
+				const mdc = this.app.metadataCache;
+
+
+				for (const f of files) {
+					// console.log(f)
+					i++;
+					const cache = this.app.metadataCache.getFileCache(f);
+					if (cache.links === undefined) {
+						continue;
+					}
+
+					// console.log(cache);
+					for (const l of cache.links) {
+						const link = await this.app.metadataCache.linkResolver(l.link);
+						if (link === undefined) {
+							failed++;
+							// console.log(f)
+							// console.log(cache)
+							// console.log(l.link)
+							// console.log("\n\n")
+						}
+						// console.log(this.app.metadataCache.getLinkpath(l.link));
+
+					}
+				}
+				console.log(failed);
+
+				for (const l of r) {
+					;
+					// console.log(l)
 				}
 			},
 		});
@@ -343,10 +388,10 @@ export default class MyPlugin extends Plugin {
 				const res = {};
 				// @ts-ignore
 				let i = 0;
-				const pages = this.dv.pages(`"${Paths.Slipbox}"`);
+				const pages = this.dv.pages(`"${Paths.Notes}"`);
 				for (const page of pages) {
-					const fm = new FrontmatterJS(page);
-					const cache = this.getFileCacheFromUUID(fm.uuid);
+					const uuid = page.file.name;
+					const cache = this.getFileCacheFromUUID(uuid);
 					const nameHeading = this.getResourceName(
 						cache,
 					);
@@ -361,9 +406,9 @@ export default class MyPlugin extends Plugin {
 					}
 
 					if (res[nameHeading] === undefined || res[nameHeading] === null) {
-						res[nameHeading] = [fm.uuid];
+						res[nameHeading] = [uuid];
 					} else {
-						res[nameHeading].push(fm.uuid);
+						res[nameHeading].push(uuid);
 					}
 
 				}
@@ -472,12 +517,9 @@ export default class MyPlugin extends Plugin {
 						file !== undefined,
 						`getFileFromUUID: returned undefined for uuid: ${_id}`,
 					);
-					const rootDir = file.path.split("/")[0];
-					const authorized = [Paths.Slipbox, Paths.Refs];
 					const alias = this.grugAlias(_id);
-					// navigator.clipboard.writeText(alias).then(() => {console.log("coucou, etc etc")});
 					// @ts-ignore
-					const activeLeaf = this.app.workspace.activeLeaf;
+					const activeLeaf = this.app.workspace.getLeaf();
 					// @ts-ignore
 					if (activeLeaf) {
 						// @ts-ignore
@@ -786,7 +828,7 @@ export default class MyPlugin extends Plugin {
 			data: "",
 		};
 
-		note.path = `${Paths.Tasks}/${note.uuid}.md`;
+		note.path = `${Paths.Actions}/${note.uuid}.md`;
 		note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# \n## content\n`;
 
 		const f = this.app.vault.create(note.path, note.data).then((f) => {
@@ -842,7 +884,7 @@ export default class MyPlugin extends Plugin {
 			data: "",
 		};
 
-		note.path = `${Paths.Slipbox}/${note.uuid}.md`;
+		note.path = `${Paths.Notes}/${note.uuid}.md`;
 		if (name === undefined) {
 			note.data = `---\nuuid: "${note.uuid}"\ncreated_at: "${note.created_at}"\n---\n# \n## Content\n`;
 		} else {
@@ -862,3 +904,98 @@ export default class MyPlugin extends Plugin {
 		});
 	}
 }
+
+export const Helper = {
+	nilCheck(val: any): boolean {
+		return val === undefined || val === null;
+	},
+
+	roundToOneDecimal(val: number): number {
+		return Math.round(val * 10) / 10;
+	},
+
+	durationStringToSec(val) {
+		if (val === undefined || val.length === 0) {
+			return 0;
+		}
+		const mult = val.slice(-1);
+		let m = 0;
+		if (mult === "h") {
+			m = 60 * 60;
+		} else if (mult === "m") {
+			m = 60;
+		} else if (mult === "d") {
+			m = 24 * 60 * 60;
+		} else if (mult == "w") {
+			m = 24 * 60 * 60 * 7;
+		} else {
+			console.warn(`Unhandled case val: ${val}`);
+			return undefined;
+		}
+
+		return m * parseInt(val.slice(0, -1));
+	},
+
+	msecToStringDuration(val: number) {
+		const oneHourInMsec = 3600000; // 1 hour in msec
+		const oneDayInMsec = 86400000; // 1 day in msec
+		if (val >= 24 * oneHourInMsec) {
+			return (
+				String(Helper.roundToOneDecimal(val / oneDayInMsec)).padStart(
+					2,
+					"0",
+				) + " d"
+			);
+		} else {
+			return (
+				String(Helper.roundToOneDecimal(val / oneHourInMsec)).padStart(
+					2,
+					"0",
+				) + " h"
+			);
+		}
+	},
+
+	isUUID(val: string): boolean {
+		if (typeof val !== "string") {
+			return false;
+		}
+		return val.length === 36;
+	},
+};
+
+class ValidationError extends Error {
+	constructor(message) {
+		super(message); // (1)
+		this.name = "ValidationError"; // (2)
+	}
+}
+
+export const Assert = {
+	True(predicate: boolean, message: string, strict = true) {
+		if (!predicate) {
+			if (strict) {
+				throw new ValidationError(message);
+			} else {
+				console.error(message);
+			}
+		}
+	},
+	False(predicate: boolean, message: string, strict = false) {
+		if (predicate) {
+			if (strict) {
+				throw new ValidationError(message);
+			} else {
+				console.error(message);
+			}
+		}
+	},
+};
+
+export const Paths = {
+	Actions: "Actions",
+	Notes: "Notes",
+	Verbatim: "Verbatim",
+	Assets: "Assets",
+	Tasks: "Actions",
+};
