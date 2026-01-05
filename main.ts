@@ -127,7 +127,7 @@ export default class MyPlugin extends Plugin {
   grugAlias(_id: string): string {
     const cache = this.getFileCacheFromUUID(_id);
     if (cache === undefined) {
-      console.error(`grugAlias: file not found in grug cache ${_id}`);
+      console.warn(`Possible invalid frontmatter for: ${_id}`);
       return "";
     }
 
@@ -151,7 +151,7 @@ export default class MyPlugin extends Plugin {
     return `[[${path}|${targetName}]]`;
   }
 
-  getFileFromUUID(_id: string): TAbstractFile {
+  getFileFromUUID(_id: string): TFile {
     return this.vaultContentDict[_id];
   }
 
@@ -198,6 +198,11 @@ export default class MyPlugin extends Plugin {
         const uuid = file.basename;
         const parent = file.parent.name;
         const cache = this.getFileCacheFromUUID(uuid);
+        if (cache === undefined) {
+          console.warn(`Possible invalid frontmatter for: ${uuid}`);
+          return;
+        }
+
         const name = this.getResourceName(cache);
 
         if (parent === "Verbatim") {
@@ -207,21 +212,22 @@ export default class MyPlugin extends Plugin {
           const assetPath = `${vaultDir}/${Paths.Assets}/${uuid}/`;
           const { shell } = require("electron");
           shell.showItemInFolder(assetPath);
-          return;
+        } else if (parent === Paths.Actions) {
+          const _uuid = this.findResourceNamed(name, Paths.Notes);
+          if (_uuid !== "") {
+            await leaf.openFile(this.getFileFromUUID(_uuid));
+          } else {
+            new Notice(`No Log Entry for: ${name}`);
+          }
+        } else if (parent === Paths.Notes) {
+          const _uuid = this.findResourceNamed(name, Paths.Actions);
+          if (_uuid !== "") {
+            await leaf.openFile(this.getFileFromUUID(_uuid));
+          } else {
+            new Notice(`No Action for: ${name}`);
+          }
         } else if (parent !== Paths.Actions && parent !== Paths.Notes) {
           new Notice(`Unsuported type: ${parent}`);
-          return
-        }
-
-        let loaded = false;
-        if (parent === Paths.Actions) {
-          loaded = this.loadNoteNamed(name);
-        } else {
-          loaded = this.loadActionNamed(name);
-        }
-
-        if (!loaded) {
-          new Notice(`Log entry not found: ${name}`);
         }
       },
     });
@@ -327,6 +333,11 @@ export default class MyPlugin extends Plugin {
           // console.log(f)
           i++;
           const cache = this.app.metadataCache.getFileCache(f);
+          if (cache === undefined) {
+            console.warn(`Possible invalid frontmatter for: ${f}`);
+            return;
+          }
+
           if (cache.links === undefined) {
             continue;
           }
@@ -366,6 +377,11 @@ export default class MyPlugin extends Plugin {
         for (const page of pages) {
           const uuid = page.file.name;
           const cache = this.getFileCacheFromUUID(uuid);
+          if (cache === undefined) {
+            console.warn(`Possible invalid frontmatter for: ${uuid}`);
+            return;
+          }
+
           const nameHeading = this.getResourceName(cache,);
 
           if (nameHeading === undefined || nameHeading === "") {
@@ -645,6 +661,10 @@ export default class MyPlugin extends Plugin {
       const uuid = file.basename;
       // @ts-ignore
       const cache = this.app.metadataCache.getFileCache(file);
+      if (cache === undefined) {
+        console.warn(`Possible invalid frontmatter for: ${uuid}`);
+        return;
+      }
       // @ts-ignore
 
       let text = "";
@@ -681,7 +701,36 @@ export default class MyPlugin extends Plugin {
     } else {
       return cache.frontmatter.uuid;
     }
+  }
 
+  findResourceNamed(name: string, path: string): string {
+    const pages = this.dv
+      .pages(`"${path}"`)
+      .where((page) => {
+        const _uuid = page.file.name;
+        const _cache = this.getFileCacheFromUUID(_uuid);
+        if (_cache === undefined) {
+          console.warn(`Possible invalid frontmatter for: ${_uuid}`);
+          return false;
+        }
+
+        const _name = this.getResourceName(_cache);
+        if (_name === undefined) {
+          return false;
+        }
+
+        if (_name !== name) {
+          return false;
+        }
+
+        return true;
+      });
+
+    if (pages.length === 0) {
+      return "";
+    } else {
+      return pages[0].file.name;
+    }
   }
 
   loadResourceNamed(name: string, path: string): boolean {
@@ -690,6 +739,11 @@ export default class MyPlugin extends Plugin {
       .where((page) => {
         const uuid = page.file.name;
         const cache = this.getFileCacheFromUUID(uuid);
+        if (cache === undefined) {
+          console.warn(`Possible invalid frontmatter for: ${uuid}`);
+          return false;
+        }
+
         const nameHeading = this.getResourceName(cache);
 
         if (nameHeading === undefined) {
@@ -756,7 +810,7 @@ export default class MyPlugin extends Plugin {
     const f = this.app.vault.create(note.path, note.data).then((f) => {
       return f;
     });
-    const active = this.app.workspace.activeLeaf;
+    const active = this.app.workspace.getLeaf();
     // @ts-ignore
     const root = active.parent;
     this.app.workspace.createLeafInParent(root, root.children.length + 1);
