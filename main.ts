@@ -124,33 +124,6 @@ export default class MyPlugin extends Plugin {
 		}
 	}
 
-	grugAlias(_id: string): string {
-		const cache = this.getFileCacheFromUUID(_id);
-		if (cache === undefined) {
-			console.warn(`Possible invalid frontmatter for: ${_id}`);
-			return "";
-		}
-
-		// what is the naming preference?
-		// alias > name heading
-		let targetName = undefined;
-
-		if (cache.headings.length > 0 && cache.headings[0].level === 1) {
-			targetName = cache.headings[0].heading;
-		} else {
-			targetName = _id;
-		}
-
-		const file = this.getFileFromUUID(_id);
-		if (file === undefined) {
-			console.error(`grugAlias: Cannot grug this id: ${_id}`);
-			return "";
-		}
-		const path = `${file.path.split("/").slice(0, -1)}/${_id}`;
-
-		return `[[${path}|${targetName}]]`;
-	}
-
 	getFileFromUUID(_id: string): TFile {
 		return this.vaultContentDict[_id];
 	}
@@ -284,7 +257,7 @@ export default class MyPlugin extends Plugin {
 					const _uuid = page.file.name;
 					const _cache = this.getFileCacheFromUUID(_uuid);
 					const _name = this.getResourceName(_cache);
-					if (_name === _uuid) {
+					if (_name === undefined) {
 						return false;
 					}
 
@@ -348,7 +321,7 @@ export default class MyPlugin extends Plugin {
 					const _uuid = page.file.name;
 					const _cache = this.getFileCacheFromUUID(_uuid);
 					const _name = this.getResourceName(_cache);
-					if (_name === _uuid) {
+					if (_name === undefined) {
 						return false;
 					}
 
@@ -576,18 +549,19 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
+		// file = leaf.view.file
+		// cache = this.app.metadataCache.getFileCache(file)
 		this.addCommand({
 			id: "clippy-the-clipper",
 			name: "Clippy Clip",
 			// @ts-ignore
 			callback: () => {
-				console.log("clippy the clipper")
 				navigator.clipboard.readText().then((text) => {
-					console.log(text)
 					let _id = undefined;
 					try {
 						_id = this.extractUUIDFromLink(text);
 					} catch {
+						new Notice(`Unaible to process clipboard: ${text}`);
 						return;
 					}
 
@@ -596,7 +570,22 @@ export default class MyPlugin extends Plugin {
 						file !== undefined,
 						`getFileFromUUID: returned undefined for uuid: ${_id}`,
 					);
-					const alias = this.grugAlias(_id);
+
+					const cache = this.getFileCacheFromUUID(_id);
+					if (cache === undefined) {
+						console.warn(`Possible invalid frontmatter for: ${_id}`);
+						return;
+					}
+
+					const name = this.getResourceName(cache);
+					let linkText = "";
+					if (name === undefined) {
+						linkText = `[[${_id}|${name}]]`;
+					} else {
+						linkText = `[[${file.path.split("/").slice(0, -1)}/${_id}|${name}]]`;
+
+					}
+
 					// @ts-ignore
 					const activeLeaf = this.app.workspace.getLeaf();
 					// @ts-ignore
@@ -604,7 +593,7 @@ export default class MyPlugin extends Plugin {
 						// @ts-ignore
 						const editor = activeLeaf.view.sourceMode.cmEditor;
 						const cursor = editor.getCursor();
-						editor.replaceRange(alias, cursor);
+						editor.replaceRange(linkText, cursor);
 					}
 				});
 			},
@@ -624,6 +613,7 @@ export default class MyPlugin extends Plugin {
 				}
 			},
 		});
+
 		this.addCommand({
 			id: "safe-delete",
 			name: "Safe Delete",
@@ -757,7 +747,6 @@ export default class MyPlugin extends Plugin {
 				console.warn(`Possible invalid frontmatter for: ${uuid}`);
 				return;
 			}
-			// @ts-ignore
 
 			let text = this.getResourceName(cache);
 
