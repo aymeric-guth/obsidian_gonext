@@ -203,7 +203,10 @@ export default class MyPlugin extends Plugin {
 					return;
 				}
 
-				const name = this.getResourceName(cache);
+				let name = this.getResourceName(cache);
+				if (name === undefined) {
+					name = uuid;
+				}
 
 				if (parent === "Verbatim") {
 					if (!await adapter.exists(`${Paths.Assets}/${uuid}/`)) {
@@ -212,6 +215,7 @@ export default class MyPlugin extends Plugin {
 					const assetPath = `${vaultDir}/${Paths.Assets}/${uuid}/`;
 					const { shell } = require("electron");
 					shell.showItemInFolder(assetPath);
+
 				} else if (parent === Paths.Actions) {
 					const _uuid = this.findResourceNamed(name, Paths.Notes);
 					if (_uuid !== "") {
@@ -219,6 +223,7 @@ export default class MyPlugin extends Plugin {
 					} else {
 						new Notice(`No Log Entry for: ${name}`);
 					}
+
 				} else if (parent === Paths.Notes) {
 					const _uuid = this.findResourceNamed(name, Paths.Actions);
 					if (_uuid !== "") {
@@ -226,9 +231,22 @@ export default class MyPlugin extends Plugin {
 					} else {
 						new Notice(`No Action for: ${name}`);
 					}
+
 				} else if (parent !== Paths.Actions && parent !== Paths.Notes) {
 					new Notice(`Unsuported type: ${parent}`);
 				}
+			},
+		});
+
+		this.addCommand({
+			id: "properties-toggle",
+			name: "Properties: toggle Visible/Hidden",
+			callback: () => {
+				// @ts-ignore
+				const cur = this.app.vault.getConfig("propertiesInDocument");
+				const next = cur === "hidden" ? "source" : "hidden";
+				// @ts-ignore
+				this.app.vault.setConfig("propertiesInDocument", next);
 			},
 		});
 
@@ -248,8 +266,8 @@ export default class MyPlugin extends Plugin {
 					return;
 				}
 
-				const name = this.getResourceName(cache);
-				if (!Helper.isDate(name)) {
+				let name = this.getResourceName(cache);
+				if (name === undefined || !Helper.isDate(name)) {
 					new Notice(`Expected format yyyy-mm-dd, got: ${name}`);
 					return;
 				}
@@ -309,7 +327,7 @@ export default class MyPlugin extends Plugin {
 				}
 
 				const name = this.getResourceName(cache);
-				if (!Helper.isDate(name)) {
+				if (name === undefined || !Helper.isDate(name)) {
 					new Notice(`Expected format yyyy-mm-dd, got: ${name}`);
 					return;
 				}
@@ -443,7 +461,6 @@ export default class MyPlugin extends Plugin {
 			callback: () => {
 				const res = {};
 				// @ts-ignore
-				let i = 0;
 				const pages = this.dv.pages(`"${Paths.Notes}"`);
 				for (const page of pages) {
 					const uuid = page.file.name;
@@ -453,21 +470,21 @@ export default class MyPlugin extends Plugin {
 						return;
 					}
 
-					const nameHeading = this.getResourceName(cache,);
+					const name = this.getResourceName(cache,);
 
-					if (nameHeading === undefined || nameHeading === "") {
+					if (name === undefined) {
 						continue;
 					}
 
 					// is not date format
-					if (nameHeading.length !== 10 || nameHeading[0] !== "2") {
+					if (!Helper.isDate(name)) {
 						continue;
 					}
 
-					if (res[nameHeading] === undefined || res[nameHeading] === null) {
-						res[nameHeading] = [uuid];
+					if (res[name] === undefined || res[name] === null) {
+						res[name] = [uuid];
 					} else {
-						res[nameHeading].push(uuid);
+						res[name].push(uuid);
 					}
 
 				}
@@ -733,6 +750,7 @@ export default class MyPlugin extends Plugin {
 			}
 
 			const uuid = file.basename;
+			const parent = file.parent.name;
 			// @ts-ignore
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (cache === undefined) {
@@ -741,24 +759,37 @@ export default class MyPlugin extends Plugin {
 			}
 			// @ts-ignore
 
-			let text = "";
-			if (file.parent.name === "Actions") {
-				const dt = new Date(this.getResourceName(cache))
-				text = `(A) ${dayShort[dt.getDay()]}. ${dt.getDate()} ${monthShort[dt.getMonth()]}`;
-			} else if (file.parent.name === "Notes") {
-				if (cache.headings.length > 0 && cache.headings[0].level === 1) {
-					text = `(N) ${cache.headings[0].heading}`;
+			let text = this.getResourceName(cache);
+
+			if (parent === "Actions") {
+				if (!Helper.isDate(text)) {
+					new Notice(`Invalid format for: ${uuid}`);
+					return;
+				}
+
+				if (text === undefined) {
+					text = `(A) ${uuid}`;
 				} else {
+					const dt = new Date(text)
+					text = `(A) ${dayShort[dt.getDay()]}. ${dt.getDate()} ${monthShort[dt.getMonth()]}`;
+				}
+
+			} else if (parent === "Notes") {
+				if (text === undefined) {
 					text = `(N) ${uuid}`;
-				}
-			} else if (file.parent.name === "Verbatim") {
-				if (cache.headings.length > 0 && cache.headings[0].level === 1) {
-					text = `(V) ${cache.headings[0].heading}`;
 				} else {
-					text = `(V) ${uuid}`;
+					text = `(N) ${text}`;
 				}
+
+			} else if (parent === "Verbatim") {
+				if (text === undefined) {
+					text = `(N) ${uuid}`;
+				} else {
+					text = `(N) ${text}`;
+				}
+
 			} else {
-				console.warn(`type undefined for file: ${file.path}`)
+				new Notice(`Type undefined for file: ${file.path}`)
 				return
 			}
 
@@ -818,13 +849,12 @@ export default class MyPlugin extends Plugin {
 					return false;
 				}
 
-				const nameHeading = this.getResourceName(cache);
-
-				if (nameHeading === undefined) {
+				const _name = this.getResourceName(cache);
+				if (_name === undefined) {
 					return false;
 				}
 
-				if (nameHeading !== name) {
+				if (_name !== name) {
 					return false;
 				}
 
