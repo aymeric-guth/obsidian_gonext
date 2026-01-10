@@ -253,6 +253,9 @@ export default class MyPlugin extends Plugin {
 					return;
 				}
 
+				let _closest = 2147483647 * 1000;
+				let _closestUuid = undefined;
+
 				this.dv.pages(`"${parent}"`).where((page) => {
 					const _uuid = page.file.name;
 					const _cache = this.getFileCacheFromUUID(_uuid);
@@ -266,20 +269,16 @@ export default class MyPlugin extends Plugin {
 					}
 
 					const _dt = new Date(_name);
-					if (closest === undefined) {
-						page.dt = _dt;
-						closest = page;
-					} else {
-						// > dt && < closest
-						if (_dt.getTime() > dt.getTime() && _dt.getTime() < closest.dt.getTime()) {
-							page.dt = _dt;
-							closest = page;
-						}
+					if (_dt.getTime() > dt.getTime() && _dt.getTime() < _closest) {
+						_closestUuid = _uuid;
+						_closest = _dt.getTime();
 					}
+
 					return false;
 				});
 
-				await leaf.openFile(this.getFileFromUUID(closest.file.name));
+				Assert.True(_closestUuid !== undefined, `Next was not found`);
+				await leaf.openFile(this.getFileFromUUID(_closestUuid));
 			},
 		});
 
@@ -288,6 +287,7 @@ export default class MyPlugin extends Plugin {
 			name: "Goto Prev",
 			// @ts-ignore
 			callback: async () => {
+				console.log("goto-prev")
 				const leaf = this.app.workspace.getLeaf();
 				const file = this.getFileFromLeaf(leaf);
 				// @ts-ignore
@@ -295,7 +295,7 @@ export default class MyPlugin extends Plugin {
 				const parent = file.parent.name;
 				const cache = this.getFileCacheFromUUID(uuid);
 				if (cache === undefined) {
-					console.warn(`Possible invalid frontmatter for: ${uuid}`);
+					new Notice(`Possible invalid frontmatter for: ${uuid}`);
 					return;
 				}
 
@@ -307,15 +307,13 @@ export default class MyPlugin extends Plugin {
 
 				const dt = new Date(name);
 				let closest = undefined;
+				let _closest = 0;
+				let _closestUuid = undefined;
 
 				if (parent !== Paths.Actions && parent !== Paths.Notes) {
 					new Notice(`Unsuported type: ${parent}`);
 					return;
 				}
-
-				console.log(`name: ${name}`);
-				console.log(`dt: ${dt}`);
-				console.log(`dt.getTime(): ${dt.getTime()}`);
 
 				this.dv.pages(`"${parent}"`).where((page) => {
 					const _uuid = page.file.name;
@@ -331,22 +329,25 @@ export default class MyPlugin extends Plugin {
 
 					const _dt = new Date(_name);
 
-					if (closest === undefined && _dt.getTime() < dt.getTime()) {
-						page.dt = _dt;
-						closest = page;
-					}
-
-					if (_dt.getTime() < dt.getTime() && _dt.getTime() > closest.dt.getTime()) {
-						page.dt = _dt;
-						closest = page;
+					// if (closest === undefined && _dt.getTime() < dt.getTime()) {
+					// 	page.dt = _dt;
+					// 	closest = page;
+					// }
+					//
+					// if (_dt.getTime() < dt.getTime() && _dt.getTime() > closest.dt.getTime()) {
+					// 	page.dt = _dt;
+					// 	closest = page;
+					// }
+					if (_dt.getTime() < dt.getTime() && _dt.getTime() > _closest) {
+						_closest = _dt.getTime();
+						_closestUuid = _uuid;
 					}
 
 					return false;
 				});
 
-				Assert.True(closest !== undefined, "Unexpected error, could not find prev");
-
-				await leaf.openFile(this.getFileFromUUID(closest.file.name));
+				Assert.True(_closestUuid !== undefined, `Next was not found`);
+				await leaf.openFile(this.getFileFromUUID(_closestUuid));
 			},
 		});
 
@@ -607,9 +608,12 @@ export default class MyPlugin extends Plugin {
 				const leaf = this.app.workspace.getLeaf();
 				const file = this.getFileFromLeaf(leaf);
 				const uuid = file.basename;
+				const parent = file.parent.name;
 
-				if (["Verbatim", "Notes", "Actions"].contains(file.parent.name)) {
+				if (["Verbatim", "Notes", "Actions"].contains(parent)) {
 					await navigator.clipboard.writeText(uuid);
+				} else if (parent === "Asset") {
+					console.log(file);
 				}
 			},
 		});
@@ -741,6 +745,10 @@ export default class MyPlugin extends Plugin {
 
 			const uuid = file.basename;
 			const parent = file.parent.name;
+			if (Helper.isUUID(parent) && file.parent.parent.name === "Assets") {
+				return;
+			}
+
 			// @ts-ignore
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (cache === undefined) {
@@ -752,7 +760,7 @@ export default class MyPlugin extends Plugin {
 
 			if (parent === "Actions") {
 				if (!Helper.isDate(text)) {
-					new Notice(`Invalid format for: ${uuid}`);
+					// new Notice(`Invalid format for: ${uuid}`);
 					return;
 				}
 
@@ -790,6 +798,10 @@ export default class MyPlugin extends Plugin {
 	}
 
 	getResourceName(cache: CachedMetadata): string {
+		if (cache.headings === undefined) {
+			return undefined;
+		}
+
 		if (cache.headings.length > 0 && cache.headings[0].level === 1) {
 			return cache.headings[0].heading;
 		} else {
