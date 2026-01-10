@@ -558,33 +558,50 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				navigator.clipboard.readText().then((text) => {
-					let _id = undefined;
-					try {
-						_id = this.extractUUIDFromLink(text);
-					} catch {
-						new Notice(`Unaible to process clipboard: ${text}`);
-						return;
-					}
-
-					const file = this.getFileFromUUID(_id);
-					Assert.True(
-						file !== undefined,
-						`getFileFromUUID: returned undefined for uuid: ${_id}`,
-					);
-
-					const cache = this.getFileCacheFromUUID(_id);
-					if (cache === undefined) {
-						console.warn(`Possible invalid frontmatter for: ${_id}`);
-						return;
-					}
-
-					const name = this.getResourceName(cache);
+					console.log(text)
+					let _name = undefined;
+					let _fqdn = undefined;
+					let file = undefined;
 					let linkText = "";
-					if (name === undefined) {
-						linkText = `[[${_id}|${name}]]`;
-					} else {
-						linkText = `[[${file.path.split("/").slice(0, -1)}/${_id}|${name}]]`;
 
+					if (text.slice(0, 7) === "Assets/") {
+						file = this.app.vault.getAbstractFileByPath(text);
+						if (Helper.nilCheck(file)) {
+							return;
+						}
+
+						_fqdn = file.path;
+						_name = file.name;
+						linkText = `[asset::[[${_fqdn}|${_name}]]]`;
+
+					} else {
+						let _id = undefined;
+						try {
+							_id = this.extractUUIDFromLink(text);
+						} catch {
+							new Notice(`Unaible to process clipboard: ${text}`);
+							return;
+						}
+
+						file = this.getFileFromUUID(_id);
+						Assert.True(
+							file !== undefined,
+							`getFileFromUUID: returned undefined for uuid: ${_id}`,
+						);
+
+						const cache = this.getFileCacheFromUUID(_id);
+						if (cache === undefined) {
+							console.warn(`Possible invalid frontmatter for: ${_id}`);
+							return;
+						}
+						_name = this.getResourceName(cache);
+						_fqdn = _id;
+
+						if (_name === undefined) {
+							linkText = `[[${_fqdn}|${_name}]]`;
+						} else {
+							linkText = `[[${file.path.split("/").slice(0, -1)}/${_fqdn}|${_name}]]`;
+						}
 					}
 
 					// @ts-ignore
@@ -612,8 +629,8 @@ export default class MyPlugin extends Plugin {
 
 				if (["Verbatim", "Notes", "Actions"].contains(parent)) {
 					await navigator.clipboard.writeText(uuid);
-				} else if (parent === "Asset") {
-					console.log(file);
+				} else if (Helper.isUUID(parent) && file.parent.parent.name === "Assets") {
+					await navigator.clipboard.writeText(file.path);
 				}
 			},
 		});
