@@ -90,7 +90,7 @@ export default class MyPlugin extends Plugin {
 			}
 		}
 
-		node.openFile(f, { active: true, });
+		node.openFile(f, { active: true });
 	}
 
 	getFileFromLeaf(leaf): TFile {
@@ -182,13 +182,14 @@ export default class MyPlugin extends Plugin {
 				}
 
 				if (parent === "Verbatim") {
-					if (!await adapter.exists(`${Paths.Assets}/${uuid}/`)) {
-						await this.app.vault.adapter.mkdir(`${Paths.Assets}/${uuid}/`);
+					if (!(await adapter.exists(`${Paths.Assets}/${uuid}/`))) {
+						await this.app.vault.adapter.mkdir(
+							`${Paths.Assets}/${uuid}/`,
+						);
 					}
 					const assetPath = `${vaultDir}/${Paths.Assets}/${uuid}/`;
 					const { shell } = require("electron");
 					shell.showItemInFolder(assetPath);
-
 				} else if (parent === Paths.Actions) {
 					const _uuid = this.findResourceNamed(name, Paths.Notes);
 					if (_uuid !== "") {
@@ -196,7 +197,6 @@ export default class MyPlugin extends Plugin {
 					} else {
 						new Notice(`No Log Entry for: ${name}`);
 					}
-
 				} else if (parent === Paths.Notes) {
 					const _uuid = this.findResourceNamed(name, Paths.Actions);
 					if (_uuid !== "") {
@@ -204,7 +204,6 @@ export default class MyPlugin extends Plugin {
 					} else {
 						new Notice(`No Action for: ${name}`);
 					}
-
 				} else if (parent !== Paths.Actions && parent !== Paths.Notes) {
 					new Notice(`Unsuported type: ${parent}`);
 				}
@@ -220,6 +219,25 @@ export default class MyPlugin extends Plugin {
 				const next = cur === "hidden" ? "source" : "hidden";
 				// @ts-ignore
 				this.app.vault.setConfig("propertiesInDocument", next);
+			},
+		});
+
+		this.addCommand({
+			id: "goto-definition",
+			name: "Goto Definition",
+			// @ts-ignore
+			callback: async () => {
+				const leaf = this.app.workspace.getLeaf();
+				const file = this.getFileFromLeaf(leaf);
+				// @ts-ignore
+				const uuid = file.basename;
+				const parent = file.parent.name;
+				const cache = this.getFileCacheFromUUID(uuid);
+				if (cache === undefined) {
+					console.warn(`Possible invalid frontmatter for: ${uuid}`);
+					return;
+				}
+				new Notice(`uuid: ${uuid}`);
 			},
 		});
 
@@ -269,7 +287,10 @@ export default class MyPlugin extends Plugin {
 					}
 
 					const _dt = new Date(_name);
-					if (_dt.getTime() > dt.getTime() && _dt.getTime() < _closest) {
+					if (
+						_dt.getTime() > dt.getTime() &&
+						_dt.getTime() < _closest
+					) {
 						_closestUuid = _uuid;
 						_closest = _dt.getTime();
 					}
@@ -287,7 +308,7 @@ export default class MyPlugin extends Plugin {
 			name: "Goto Prev",
 			// @ts-ignore
 			callback: async () => {
-				console.log("goto-prev")
+				console.log("goto-prev");
 				const leaf = this.app.workspace.getLeaf();
 				const file = this.getFileFromLeaf(leaf);
 				// @ts-ignore
@@ -338,7 +359,10 @@ export default class MyPlugin extends Plugin {
 					// 	page.dt = _dt;
 					// 	closest = page;
 					// }
-					if (_dt.getTime() < dt.getTime() && _dt.getTime() > _closest) {
+					if (
+						_dt.getTime() < dt.getTime() &&
+						_dt.getTime() > _closest
+					) {
 						_closest = _dt.getTime();
 						_closestUuid = _uuid;
 					}
@@ -356,7 +380,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Index",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/eec0a297-982c-471c-9748-4943ec45fe94.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/eec0a297-982c-471c-9748-4943ec45fe94.md",
+				);
 			},
 		});
 
@@ -365,7 +391,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Journal",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/a66c1ed1-3022-4197-9ade-152b138813d9.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/a66c1ed1-3022-4197-9ade-152b138813d9.md",
+				);
 			},
 		});
 
@@ -374,7 +402,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Inbox",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/8c7aad2a-b67f-44b7-86fd-27a50410be65.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/8c7aad2a-b67f-44b7-86fd-27a50410be65.md",
+				);
 			},
 		});
 
@@ -383,7 +413,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Planning",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/db5a4532-9025-404b-84ab-85e571884e2d.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/db5a4532-9025-404b-84ab-85e571884e2d.md",
+				);
 			},
 		});
 
@@ -392,7 +424,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Next Actions",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/ab7aec92-2273-40bc-9632-da70937b5575.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/ab7aec92-2273-40bc-9632-da70937b5575.md",
+				);
 			},
 		});
 
@@ -401,7 +435,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Someday Maybe",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/e7b605b9-4d3a-4c17-bf4e-e7f1a51f7a30.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/e7b605b9-4d3a-4c17-bf4e-e7f1a51f7a30.md",
+				);
 			},
 		});
 
@@ -410,7 +446,9 @@ export default class MyPlugin extends Plugin {
 			name: "Open Waiting For",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/7a13d7ac-732b-4cec-91f0-1498c824b82e.md");
+				this.openViewInNewTabIfNotOpened(
+					"Notes/7a13d7ac-732b-4cec-91f0-1498c824b82e.md",
+				);
 			},
 		});
 
@@ -440,11 +478,13 @@ export default class MyPlugin extends Plugin {
 					const uuid = page.file.name;
 					const cache = this.getFileCacheFromUUID(uuid);
 					if (cache === undefined) {
-						console.warn(`Possible invalid frontmatter for: ${uuid}`);
+						console.warn(
+							`Possible invalid frontmatter for: ${uuid}`,
+						);
 						return;
 					}
 
-					const name = this.getResourceName(cache,);
+					const name = this.getResourceName(cache);
 
 					if (name === undefined) {
 						continue;
@@ -460,7 +500,6 @@ export default class MyPlugin extends Plugin {
 					} else {
 						res[name].push(uuid);
 					}
-
 				}
 
 				const keys = Object.keys(res);
@@ -568,12 +607,16 @@ export default class MyPlugin extends Plugin {
 
 				const candidates = [];
 				for (const l of cache.links) {
-					const linktext = parseLinktext(l.link)
+					const linktext = parseLinktext(l.link);
 					let file = undefined;
 					try {
-						file = this.app.metadataCache.getFirstLinkpathDest(linktext.path)
+						file = this.app.metadataCache.getFirstLinkpathDest(
+							linktext.path,
+						);
 					} catch {
-						console.warn(`getFirstLinkpathDest failed for: ${linktext}`);
+						console.warn(
+							`getFirstLinkpathDest failed for: ${linktext}`,
+						);
 						continue;
 					}
 
@@ -586,26 +629,31 @@ export default class MyPlugin extends Plugin {
 					new Notice(`No PDF in current view where found`);
 					return;
 				} else if (candidates.length > 1) {
-					new Notice(`More than one PDF in current view, opening first link`);
+					new Notice(
+						`More than one PDF in current view, opening first link`,
+					);
 				}
 				const candidate = candidates[0];
 
 				if (!Helper.isUUID(candidate.parent.name)) {
-					console.log(candidate.parent.name)
+					console.log(candidate.parent.name);
 					new Notice(`Invalid asset location: ${candidate.path}`);
 					return;
 				}
 
-				if (candidate.parent.parent === undefined || candidate.parent.parent.name !== "Assets") {
+				if (
+					candidate.parent.parent === undefined ||
+					candidate.parent.parent.name !== "Assets"
+				) {
 					new Notice(`Invalid asset location: ${candidate.path}`);
 					return;
 				}
 
 				const adapter = this.app.vault.adapter;
 				// @ts-ignore
-				const path = `${adapter.basePath}/${candidate.parent.path}`
+				const path = `${adapter.basePath}/${candidate.parent.path}`;
 
-				const { spawn } = require("child_process")
+				const { spawn } = require("child_process");
 
 				const command = `systemd-run --user --working-directory=${path} /usr/bin/zathura ${candidate.name}`;
 				const child = spawn("/bin/sh", ["-lc", command], {
@@ -620,7 +668,7 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				navigator.clipboard.readText().then((text) => {
-					console.log(text)
+					console.log(text);
 					let _name = undefined;
 					let _fqdn = undefined;
 					let file = undefined;
@@ -635,13 +683,14 @@ export default class MyPlugin extends Plugin {
 						_fqdn = file.path;
 						_name = file.name;
 						linkText = `[asset:: [[${_fqdn}| ${_name}]]]`;
-
 					} else {
 						let _id = undefined;
 						try {
 							_id = this.extractUUIDFromLink(text);
 						} catch {
-							new Notice(`Unaible to process clipboard: ${text} `);
+							new Notice(
+								`Unaible to process clipboard: ${text} `,
+							);
 							return;
 						}
 
@@ -653,7 +702,9 @@ export default class MyPlugin extends Plugin {
 
 						const cache = this.getFileCacheFromUUID(_id);
 						if (cache === undefined) {
-							console.warn(`Possible invalid frontmatter for: ${_id} `);
+							console.warn(
+								`Possible invalid frontmatter for: ${_id} `,
+							);
 							return;
 						}
 						_name = this.getResourceName(cache);
@@ -691,7 +742,10 @@ export default class MyPlugin extends Plugin {
 
 				if (["Verbatim", "Notes", "Actions"].contains(parent)) {
 					await navigator.clipboard.writeText(uuid);
-				} else if (Helper.isUUID(parent) && file.parent.parent.name === "Assets") {
+				} else if (
+					Helper.isUUID(parent) &&
+					file.parent.parent.name === "Assets"
+				) {
 					await navigator.clipboard.writeText(file.path);
 				}
 			},
@@ -846,27 +900,24 @@ export default class MyPlugin extends Plugin {
 				if (text === undefined) {
 					text = `(A) ${uuid} `;
 				} else {
-					const dt = new Date(text)
+					const dt = new Date(text);
 					text = `(A) ${dayShort[dt.getDay()]}.${dt.getDate()} ${monthShort[dt.getMonth()]}`;
 				}
-
 			} else if (parent === "Notes") {
 				if (text === undefined) {
 					text = `(N) ${uuid}`;
 				} else {
 					text = `(N) ${text}`;
 				}
-
 			} else if (parent === "Verbatim") {
 				if (text === undefined) {
 					text = `(N) ${uuid}`;
 				} else {
 					text = `(N) ${text}`;
 				}
-
 			} else {
-				new Notice(`Type undefined for file: ${file.path} `)
-				return
+				new Notice(`Type undefined for file: ${file.path} `);
+				return;
 			}
 
 			// @ts-ignore
@@ -889,27 +940,25 @@ export default class MyPlugin extends Plugin {
 	}
 
 	findResourceNamed(name: string, path: string): string {
-		const pages = this.dv
-			.pages(`"${path}"`)
-			.where((page) => {
-				const _uuid = page.file.name;
-				const _cache = this.getFileCacheFromUUID(_uuid);
-				if (_cache === undefined) {
-					console.warn(`Possible invalid frontmatter for: ${_uuid} `);
-					return false;
-				}
+		const pages = this.dv.pages(`"${path}"`).where((page) => {
+			const _uuid = page.file.name;
+			const _cache = this.getFileCacheFromUUID(_uuid);
+			if (_cache === undefined) {
+				console.warn(`Possible invalid frontmatter for: ${_uuid} `);
+				return false;
+			}
 
-				const _name = this.getResourceName(_cache);
-				if (_name === undefined) {
-					return false;
-				}
+			const _name = this.getResourceName(_cache);
+			if (_name === undefined) {
+				return false;
+			}
 
-				if (_name !== name) {
-					return false;
-				}
+			if (_name !== name) {
+				return false;
+			}
 
-				return true;
-			});
+			return true;
+		});
 
 		if (pages.length === 0) {
 			return "";
@@ -919,27 +968,25 @@ export default class MyPlugin extends Plugin {
 	}
 
 	loadResourceNamed(name: string, path: string): boolean {
-		const pages = this.dv
-			.pages(`"${path}"`)
-			.where((page) => {
-				const uuid = page.file.name;
-				const cache = this.getFileCacheFromUUID(uuid);
-				if (cache === undefined) {
-					console.warn(`Possible invalid frontmatter for: ${uuid} `);
-					return false;
-				}
+		const pages = this.dv.pages(`"${path}"`).where((page) => {
+			const uuid = page.file.name;
+			const cache = this.getFileCacheFromUUID(uuid);
+			if (cache === undefined) {
+				console.warn(`Possible invalid frontmatter for: ${uuid} `);
+				return false;
+			}
 
-				const _name = this.getResourceName(cache);
-				if (_name === undefined) {
-					return false;
-				}
+			const _name = this.getResourceName(cache);
+			if (_name === undefined) {
+				return false;
+			}
 
-				if (_name !== name) {
-					return false;
-				}
+			if (_name !== name) {
+				return false;
+			}
 
-				return true;
-			});
+			return true;
+		});
 
 		if (pages.length === 0) {
 			return false;
@@ -1129,12 +1176,12 @@ export const Helper = {
 		}
 
 		const dt = new Date(val);
-		if (dt.toString() === 'Invalid Date') {
+		if (dt.toString() === "Invalid Date") {
 			return false;
 		}
 
 		return true;
-	}
+	},
 };
 
 class ValidationError extends Error {
