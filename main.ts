@@ -7,7 +7,7 @@ import {
 	addIcon,
 	CachedMetadata,
 	TFile,
-	TAbstractFile,
+	parseLinktext,
 	Notice,
 } from "obsidian";
 import { v4 as uuidv4, v1 as uuidv1 } from "uuid";
@@ -365,7 +365,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Journal",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/246631f7-a557-4bfd-b7a0-d8807a2973af.md");
+				this.openViewInNewTabIfNotOpened("Notes/a66c1ed1-3022-4197-9ade-152b138813d9.md");
 			},
 		});
 
@@ -383,7 +383,7 @@ export default class MyPlugin extends Plugin {
 			name: "Open Planning",
 			// @ts-ignore
 			callback: () => {
-				this.openViewInNewTabIfNotOpened("Notes/d371e0f9-1a7f-4cd0-8fa4-260c176da4a4.md");
+				this.openViewInNewTabIfNotOpened("Notes/db5a4532-9025-404b-84ab-85e571884e2d.md");
 			},
 		});
 
@@ -550,8 +550,70 @@ export default class MyPlugin extends Plugin {
 			},
 		});
 
-		// file = leaf.view.file
-		// cache = this.app.metadataCache.getFileCache(file)
+		this.addCommand({
+			id: "open-pdf",
+			name: "Open PDF",
+			// @ts-ignore
+			callback: () => {
+				const leaf = this.app.workspace.getLeaf();
+				const file = this.getFileFromLeaf(leaf);
+				// @ts-ignore
+				const uuid = file.basename;
+				const parent = file.parent.name;
+				const cache = this.getFileCacheFromUUID(uuid);
+				if (cache === undefined) {
+					new Notice(`Possible invalid frontmatter for: ${uuid}`);
+					return;
+				}
+
+				const candidates = [];
+				for (const l of cache.links) {
+					const linktext = parseLinktext(l.link)
+					let file = undefined;
+					try {
+						file = this.app.metadataCache.getFirstLinkpathDest(linktext.path)
+					} catch {
+						console.warn(`getFirstLinkpathDest failed for: ${linktext}`);
+						continue;
+					}
+
+					if (file.extension === "pdf") {
+						candidates.push(file);
+					}
+				}
+
+				if (candidates.length === 0) {
+					new Notice(`No PDF in current view where found`);
+					return;
+				} else if (candidates.length > 1) {
+					new Notice(`More than one PDF in current view, opening first link`);
+				}
+				const candidate = candidates[0];
+
+				if (!Helper.isUUID(candidate.parent.name)) {
+					console.log(candidate.parent.name)
+					new Notice(`Invalid asset location: ${candidate.path}`);
+					return;
+				}
+
+				if (candidate.parent.parent === undefined || candidate.parent.parent.name !== "Assets") {
+					new Notice(`Invalid asset location: ${candidate.path}`);
+					return;
+				}
+
+				const adapter = this.app.vault.adapter;
+				// @ts-ignore
+				const path = `${adapter.basePath}/${candidate.parent.path}`
+
+				const { spawn } = require("child_process")
+
+				const command = `systemd-run --user --working-directory=${path} /usr/bin/zathura ${candidate.name}`;
+				const child = spawn("/bin/sh", ["-lc", command], {
+					stdio: ["ignore", "pipe", "pipe"], // ignore stdin => non interactif
+				});
+			},
+		});
+
 		this.addCommand({
 			id: "clippy-the-clipper",
 			name: "Clippy Clip",
@@ -572,26 +634,26 @@ export default class MyPlugin extends Plugin {
 
 						_fqdn = file.path;
 						_name = file.name;
-						linkText = `[asset::[[${_fqdn}|${_name}]]]`;
+						linkText = `[asset:: [[${_fqdn}| ${_name}]]]`;
 
 					} else {
 						let _id = undefined;
 						try {
 							_id = this.extractUUIDFromLink(text);
 						} catch {
-							new Notice(`Unaible to process clipboard: ${text}`);
+							new Notice(`Unaible to process clipboard: ${text} `);
 							return;
 						}
 
 						file = this.getFileFromUUID(_id);
 						Assert.True(
 							file !== undefined,
-							`getFileFromUUID: returned undefined for uuid: ${_id}`,
+							`getFileFromUUID: returned undefined for uuid: ${_id} `,
 						);
 
 						const cache = this.getFileCacheFromUUID(_id);
 						if (cache === undefined) {
-							console.warn(`Possible invalid frontmatter for: ${_id}`);
+							console.warn(`Possible invalid frontmatter for: ${_id} `);
 							return;
 						}
 						_name = this.getResourceName(cache);
@@ -769,7 +831,7 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			const cache = this.app.metadataCache.getFileCache(file);
 			if (cache === undefined) {
-				console.warn(`Possible invalid frontmatter for: ${uuid}`);
+				console.warn(`Possible invalid frontmatter for: ${uuid} `);
 				return;
 			}
 
@@ -777,15 +839,15 @@ export default class MyPlugin extends Plugin {
 
 			if (parent === "Actions") {
 				if (!Helper.isDate(text)) {
-					// new Notice(`Invalid format for: ${uuid}`);
+					// new Notice(`Invalid format for: ${ uuid } `);
 					return;
 				}
 
 				if (text === undefined) {
-					text = `(A) ${uuid}`;
+					text = `(A) ${uuid} `;
 				} else {
 					const dt = new Date(text)
-					text = `(A) ${dayShort[dt.getDay()]}. ${dt.getDate()} ${monthShort[dt.getMonth()]}`;
+					text = `(A) ${dayShort[dt.getDay()]}.${dt.getDate()} ${monthShort[dt.getMonth()]}`;
 				}
 
 			} else if (parent === "Notes") {
@@ -803,7 +865,7 @@ export default class MyPlugin extends Plugin {
 				}
 
 			} else {
-				new Notice(`Type undefined for file: ${file.path}`)
+				new Notice(`Type undefined for file: ${file.path} `)
 				return
 			}
 
@@ -833,7 +895,7 @@ export default class MyPlugin extends Plugin {
 				const _uuid = page.file.name;
 				const _cache = this.getFileCacheFromUUID(_uuid);
 				if (_cache === undefined) {
-					console.warn(`Possible invalid frontmatter for: ${_uuid}`);
+					console.warn(`Possible invalid frontmatter for: ${_uuid} `);
 					return false;
 				}
 
@@ -863,7 +925,7 @@ export default class MyPlugin extends Plugin {
 				const uuid = page.file.name;
 				const cache = this.getFileCacheFromUUID(uuid);
 				if (cache === undefined) {
-					console.warn(`Possible invalid frontmatter for: ${uuid}`);
+					console.warn(`Possible invalid frontmatter for: ${uuid} `);
 					return false;
 				}
 
@@ -880,15 +942,15 @@ export default class MyPlugin extends Plugin {
 			});
 
 		if (pages.length === 0) {
-			return;
+			return false;
 		}
 
-		if (pages.length === 0) {
-			return false;
-		} else {
-			this.openViewInNewTabIfNotOpened(`${path}/${pages[0].file.name}.md`);
-			return true;
+		if (pages.length > 1) {
+			console.warn(`Multiple matches for: ${path}/${name}`);
 		}
+
+		this.openViewInNewTabIfNotOpened(`${path}/${pages[0].file.name}.md`);
+		return true;
 	}
 
 	loadActionNamed(name: string): boolean {
@@ -963,7 +1025,7 @@ export default class MyPlugin extends Plugin {
 		const f = this.app.vault.create(note.path, note.data).then((f) => {
 			return f;
 		});
-		const active = this.app.workspace.activeLeaf;
+		const active = this.app.workspace.getLeaf();
 		// @ts-ignore
 		const root = active.parent;
 		this.app.workspace.createLeafInParent(root, root.children.length + 1);
@@ -992,7 +1054,7 @@ export default class MyPlugin extends Plugin {
 		const f = this.app.vault.create(note.path, note.data).then((f) => {
 			return f;
 		});
-		const active = this.app.workspace.activeLeaf;
+		const active = this.app.workspace.getLeaf();
 		// @ts-ignore
 		const root = active.parent;
 		this.app.workspace.createLeafInParent(root, root.children.length + 1);
