@@ -374,7 +374,9 @@ export default class MyPlugin extends Plugin {
         let retry = 0;
         const activateNewLeaf = () => {
           // @ts-ignore
-          const leaf = root.children.find((leaf) => !leaves.includes(leaf));
+          const leaf = root.children.find(
+            (leaf) => !leaves.includes(leaf),
+          );
           if (leaf !== undefined) {
             this.app.workspace.setActiveLeaf(leaf, { focus: true });
             return;
@@ -814,8 +816,9 @@ export default class MyPlugin extends Plugin {
       id: "clippy-the-clipper",
       name: "Clippy Clip",
       // @ts-ignore
-      callback: () => {
-        navigator.clipboard.readText().then((text) => {
+      editorCallback: (editor) => {
+        navigator.clipboard.readText().then((clipboardText) => {
+          const text = clipboardText.replace(/[\r\n]+/g, "");
           console.log(text);
           let _name = undefined;
           let _fqdn = undefined;
@@ -865,15 +868,16 @@ export default class MyPlugin extends Plugin {
             }
           }
 
-          // @ts-ignore
-          const activeLeaf = this.app.workspace.getLeaf();
-          // @ts-ignore
-          if (activeLeaf) {
-            // @ts-ignore
-            const editor = activeLeaf.view.sourceMode.cmEditor;
-            const cursor = editor.getCursor();
-            editor.replaceRange(linkText, cursor);
-          }
+          console.log(`linkText: "${linkText}"`);
+          const cursor = editor.getCursor();
+          const ch = Math.min(
+            cursor.ch + 1,
+            editor.getLine(cursor.line).length,
+          );
+          editor.replaceRange(linkText, {
+            line: cursor.line,
+            ch: ch,
+          });
         });
       },
     });
