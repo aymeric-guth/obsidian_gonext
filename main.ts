@@ -295,6 +295,101 @@ export default class MyPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "goto-definition-new-leaf",
+      name: "Goto Definition Open in New Leaf",
+      // @ts-ignore
+      editorCallback: (editor) => {
+        const cursor = editor.getCursor();
+        const line = editor.getLine(cursor.line);
+        const links = [];
+
+        const collect = (regexp, cursorOffset) => {
+          let match = undefined;
+          while ((match = regexp.exec(line)) !== null) {
+            const value = match[0];
+            links.push({
+              from: match.index,
+              to: match.index + value.length,
+              cursor: match.index + cursorOffset(value),
+            });
+          }
+        };
+
+        collect(/!?\[\[[^\]]+\]\]/g, (value) =>
+          value.startsWith("![[") ? 3 : 2,
+        );
+        collect(
+          /!?\[[^\]\n]*\]\([^)]+\)/g,
+          (value) => value.indexOf("](") + 2,
+        );
+        collect(/<https?:\/\/[^>\s]+>/g, () => 1);
+        collect(/https?:\/\/[^\s<>()]+/g, () => 1);
+
+        const candidates = links.filter((link) => {
+          return !links.some(
+            (other) =>
+              other !== link &&
+              other.from <= link.from &&
+              other.to >= link.to &&
+              other.to - other.from > link.to - link.from,
+          );
+        });
+
+        const distance = (link) => {
+          if (cursor.ch < link.from) {
+            return link.from - cursor.ch;
+          }
+          if (cursor.ch > link.to) {
+            return cursor.ch - link.to;
+          }
+          return 0;
+        };
+
+        const link =
+          candidates.find(
+            (link) =>
+              link.from <= cursor.ch && cursor.ch <= link.to,
+          ) ||
+          candidates.sort(
+            (a, b) => distance(a) - distance(b) || a.from - b.from,
+          )[0];
+
+        if (link === undefined) {
+          new Notice(`No link found`);
+          return;
+        }
+
+        editor.focus();
+        editor.setCursor(cursor.line, link.cursor);
+        const activeLeaf = this.app.workspace.getLeaf();
+        // @ts-ignore
+        const root = activeLeaf.parent;
+        // @ts-ignore
+        const leaves = [...root.children];
+        // @ts-ignore
+        this.app.commands.executeCommandById(
+          "editor:open-link-in-new-leaf",
+        );
+
+        let retry = 0;
+        const activateNewLeaf = () => {
+          // @ts-ignore
+          const leaf = root.children.find((leaf) => !leaves.includes(leaf));
+          if (leaf !== undefined) {
+            this.app.workspace.setActiveLeaf(leaf, { focus: true });
+            return;
+          }
+          if (retry < 10) {
+            retry += 1;
+            setTimeout(activateNewLeaf, 50);
+          }
+        };
+
+        setTimeout(activateNewLeaf, 0);
+      },
+    });
+
+    this.addCommand({
       id: "goto-next",
       name: "Goto Next",
       // @ts-ignore
