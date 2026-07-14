@@ -1,5 +1,7 @@
 // @ts-ignore
 import {
+  App,
+  FuzzySuggestModal,
   Plugin,
   Workspace,
   // @ts-ignore
@@ -11,6 +13,40 @@ import {
   Notice,
 } from "obsidian";
 import { v4 as uuidv4, v1 as uuidv1 } from "uuid";
+
+const INDEX_NOTE_PATH =
+  "Notes/eec0a297-982c-471c-9748-4943ec45fe94.md";
+
+interface IndexLinkEntry {
+  target: string;
+  alias: string;
+}
+
+class IndexLinkSuggestModal extends FuzzySuggestModal<IndexLinkEntry> {
+  constructor(
+    app: App,
+    private entries: IndexLinkEntry[],
+    private sourcePath: string,
+  ) {
+    super(app);
+    this.setPlaceholder("Search index links...");
+    this.emptyStateText = "No matching index link";
+  }
+
+  getItems(): IndexLinkEntry[] {
+    return this.entries;
+  }
+
+  getItemText(item: IndexLinkEntry): string {
+    return item.alias;
+  }
+
+  onChooseItem(item: IndexLinkEntry): void {
+    this.app.workspace
+      .openLinkText(item.target, this.sourcePath, false)
+      .catch(() => new Notice(`Unable to open: ${item.alias}`));
+  }
+}
 
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthShort = [
@@ -137,6 +173,35 @@ export default class MyPlugin extends Plugin {
     return this.app.metadataCache.getFileCache(f);
   }
 
+  getIndexLinkEntries(): IndexLinkEntry[] | null {
+    const indexFile = this.app.vault.getAbstractFileByPath(
+      INDEX_NOTE_PATH,
+    );
+    if (!(indexFile instanceof TFile)) {
+      new Notice(`Index note not found: ${INDEX_NOTE_PATH}`);
+      return null;
+    }
+
+    const cache = this.app.metadataCache.getFileCache(indexFile);
+    if (cache === null || cache === undefined) {
+      new Notice(`Index note metadata is not ready: ${INDEX_NOTE_PATH}`);
+      return null;
+    }
+
+    const entries = new Map<string, IndexLinkEntry>();
+    for (const link of cache.links ?? []) {
+      const alias = link.displayText?.trim();
+      if (alias === undefined || alias === "") {
+        continue;
+      }
+
+      const entry = { target: link.link, alias };
+      entries.set(`${entry.target}\u0000${entry.alias}`, entry);
+    }
+
+    return Array.from(entries.values());
+  }
+
   async onload() {
     console.log("gonext - onload()");
     await this.loadSettings();
@@ -157,6 +222,23 @@ export default class MyPlugin extends Plugin {
       "GoNextIcon",
       `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path fill="currentColor" d="M20 12V2h2v10zm4 0V2h2v10zm4 0V2h2v10zm-12 8a3.912 3.912 0 0 1-4-4a3.912 3.912 0 0 1 4-4v-2a6 6 0 1 0 6 6h-2a3.912 3.912 0 0 1-4 4"></path><path fill="currentColor" d="M28.893 18.454L26.098 16l-1.318 1.504l2.792 2.452l-2.36 4.088l-3.427-1.16a9.032 9.032 0 0 1-2.714 1.565L18.36 28h-4.72l-.71-3.55a9.095 9.095 0 0 1-2.695-1.572l-3.447 1.166l-2.36-4.088l2.725-2.395a8.926 8.926 0 0 1-.007-3.128l-2.718-2.39l2.36-4.087l3.427 1.16A9.03 9.03 0 0 1 12.93 7.55L13.64 4H16V2h-2.36a2 2 0 0 0-1.961 1.608l-.504 2.519a10.967 10.967 0 0 0-1.327.753l-2.42-.819a1.998 1.998 0 0 0-2.372.895l-2.36 4.088a2 2 0 0 0 .411 2.502l1.931 1.697C5.021 15.495 5 15.745 5 16c0 .258.01.513.028.766l-1.92 1.688a2 2 0 0 0-.413 2.502l2.36 4.088a1.998 1.998 0 0 0 2.374.895l2.434-.824a10.974 10.974 0 0 0 1.312.759l.503 2.518A2 2 0 0 0 13.64 30h4.72a2 2 0 0 0 1.961-1.608l.504-2.519a10.967 10.967 0 0 0 1.327-.753l2.419.818a1.998 1.998 0 0 0 2.373-.894l2.36-4.088a2 2 0 0 0-.411-2.502"></path></svg>`,
     );
+
+    this.addCommand({
+      id: "search-index-links",
+      name: "Search Index Links",
+      callback: () => {
+        const entries = this.getIndexLinkEntries();
+        if (entries === null) {
+          return;
+        }
+
+        new IndexLinkSuggestModal(
+          this.app,
+          entries,
+          INDEX_NOTE_PATH,
+        ).open();
+      },
+    });
 
     this.addCommand({
       id: "open-assets",
@@ -758,10 +840,11 @@ export default class MyPlugin extends Plugin {
         const candidates = [];
         for (const l of cache.links) {
           const linktext = parseLinktext(l.link);
-          let file = undefined;
+          let linkedFile = undefined;
           try {
-            file = this.app.metadataCache.getFirstLinkpathDest(
+            linkedFile = this.app.metadataCache.getFirstLinkpathDest(
               linktext.path,
+              file.path,
             );
           } catch {
             console.warn(
@@ -770,8 +853,8 @@ export default class MyPlugin extends Plugin {
             continue;
           }
 
-          if (file.extension === "pdf") {
-            candidates.push(file);
+          if (linkedFile?.extension === "pdf") {
+            candidates.push(linkedFile);
           }
         }
 
