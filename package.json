@@ -1,6 +1,6 @@
 {
 	"name": "gonext",
-	"version": "1.0.48",
+	"version": "1.3.0",
 	"description": "You should not be here",
 	"main": "main.js",
 	"scripts": {
