@@ -97,12 +97,7 @@ class IndexLinkSuggestModal extends FuzzySuggestModal<IndexLinkEntry> {
   }
 
   onChooseItem(item: IndexLinkEntry): void {
-    console.log(`${item.target}.md`);
     this.openViewInNewTabIfNotOpened(`${item.target}.md`);
-    // this.app.workspace
-    //   .openLinkText(item.target, this.sourcePath, false)
-    //   .catch(() => new Notice(`Unable to open: ${item.alias}`));
-    // }
   }
 }
 
