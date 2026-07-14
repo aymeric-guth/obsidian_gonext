@@ -818,6 +818,7 @@ export default class MyPlugin extends Plugin {
 			name: "Goto Next",
 			// @ts-ignore
 			callback: async () => {
+				// @ts-ignore
 				const dv = this.app.plugins.plugins.dataview.api;
 				const leaf = this.app.workspace.getLeaf();
 				const file = this.getFileFromLeaf(leaf);
@@ -881,6 +882,7 @@ export default class MyPlugin extends Plugin {
 			name: "Goto Prev",
 			// @ts-ignore
 			callback: async () => {
+				// @ts-ignore
 				const dv = this.app.plugins.plugins.dataview.api;
 				console.log("goto-prev");
 				const leaf = this.app.workspace.getLeaf();
@@ -1046,6 +1048,7 @@ export default class MyPlugin extends Plugin {
 			// @ts-ignore
 			callback: () => {
 				const res = {};
+				// @ts-ignore
 				const dv = this.app.plugins.plugins.dataview.api;
 				// @ts-ignore
 				const pages = dv.pages(`"${Paths.Notes}"`);
@@ -1623,6 +1626,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	findResourceNamed(name: string, path: string): string {
+		// @ts-ignore
 		const dv = this.app.plugins.plugins.dataview.api;
 		const pages = dv.pages(`"${path}"`).where((page) => {
 			const _uuid = page.file.name;
@@ -1652,6 +1656,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	loadResourceNamed(name: string, path: string): boolean {
+		// @ts-ignore
 		const dv = this.app.plugins.plugins.dataview.api;
 		const pages = dv.pages(`"${path}"`).where((page) => {
 			const uuid = page.file.name;
