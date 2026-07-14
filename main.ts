@@ -9,6 +9,7 @@ import {
   addIcon,
   CachedMetadata,
   TFile,
+  parseFrontMatterAliases,
   parseLinktext,
   Notice,
 } from "obsidian";
@@ -120,10 +121,12 @@ const monthShort = [
 // Remember to rename these classes and interfaces!
 interface MyPluginSettings {
   mySetting: string;
+  managedHeadingAliases: { [path: string]: string };
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
   mySetting: "default",
+  managedHeadingAliases: {},
 };
 
 export default class MyPlugin extends Plugin {
@@ -138,6 +141,9 @@ export default class MyPlugin extends Plugin {
   api: any;
   vaultContent: TFile[] = [];
   vaultContentDict: { [id: string]: TFile } = {};
+  headingAliasTimers: Map<string, number> = new Map();
+  headingAliasSyncs: Map<string, Promise<void>> = new Map();
+  aliasSettingsSaveTimer: number = undefined;
 
   openViewInNewTabIfNotOpened(name: string) {
     const f = this.app.vault.getAbstractFileByPath(name);
@@ -251,6 +257,199 @@ export default class MyPlugin extends Plugin {
     }
 
     return Array.from(entries.values());
+  }
+
+  isHeadingAliasFile(file: TFile): boolean {
+    return (
+      file.extension === "md" &&
+      (file.path.startsWith("Notes/") ||
+        file.path.startsWith("Verbatim/"))
+    );
+  }
+
+  getFirstHeadingAlias(cache: CachedMetadata): string | undefined {
+    const heading = cache.headings?.find((item) => item.level === 1);
+    const alias = heading?.heading.trim();
+    return alias === "" ? undefined : alias;
+  }
+
+  getNextHeadingAliases(
+    existingAliases: string[],
+    previousManagedAlias: string | undefined,
+    desiredAlias: string | undefined,
+  ): { aliases: string[]; managedAlias: string | undefined } {
+    const aliases = previousManagedAlias !== undefined
+      ? existingAliases.filter((alias) => alias !== previousManagedAlias)
+      : [...existingAliases];
+    const desiredAliasIsManual =
+      desiredAlias !== undefined && aliases.includes(desiredAlias);
+
+    if (desiredAlias !== undefined && !desiredAliasIsManual) {
+      aliases.push(desiredAlias);
+    }
+
+    return {
+      aliases,
+      managedAlias:
+        desiredAlias !== undefined && !desiredAliasIsManual
+          ? desiredAlias
+          : undefined,
+    };
+  }
+
+  aliasesAreEqual(left: string[], right: string[]): boolean {
+    return (
+      left.length === right.length &&
+      left.every((alias, index) => alias === right[index])
+    );
+  }
+
+  setManagedHeadingAlias(
+    path: string,
+    alias: string | undefined,
+  ): void {
+    const current = this.settings.managedHeadingAliases[path];
+    if (current === alias) {
+      return;
+    }
+
+    if (alias === undefined) {
+      delete this.settings.managedHeadingAliases[path];
+    } else {
+      this.settings.managedHeadingAliases[path] = alias;
+    }
+    this.scheduleAliasSettingsSave();
+  }
+
+  scheduleAliasSettingsSave(): void {
+    if (this.aliasSettingsSaveTimer !== undefined) {
+      window.clearTimeout(this.aliasSettingsSaveTimer);
+    }
+    this.aliasSettingsSaveTimer = window.setTimeout(() => {
+      this.aliasSettingsSaveTimer = undefined;
+      this.saveSettings().catch((error) => {
+        console.error("Unable to save managed heading aliases", error);
+      });
+    }, 500);
+  }
+
+  async reconcileHeadingAlias(file: TFile): Promise<void> {
+    const previousManagedAlias =
+      this.settings.managedHeadingAliases[file.path];
+    if (file.extension !== "md") {
+      this.setManagedHeadingAlias(file.path, undefined);
+      return;
+    }
+
+    const cache = this.app.metadataCache.getFileCache(file);
+    if (cache === null || cache === undefined) {
+      return;
+    }
+
+    const desiredAlias = this.isHeadingAliasFile(file)
+      ? this.getFirstHeadingAlias(cache)
+      : undefined;
+    const existingAliases = parseFrontMatterAliases(cache.frontmatter) ?? [];
+    const next = this.getNextHeadingAliases(
+      existingAliases,
+      previousManagedAlias,
+      desiredAlias,
+    );
+    let nextManagedAlias = next.managedAlias;
+
+    if (!this.aliasesAreEqual(existingAliases, next.aliases)) {
+      await this.app.fileManager.processFrontMatter(
+        file,
+        (frontmatter) => {
+          const currentAliases =
+            parseFrontMatterAliases(frontmatter) ?? [];
+          const currentNext = this.getNextHeadingAliases(
+            currentAliases,
+            previousManagedAlias,
+            desiredAlias,
+          );
+          nextManagedAlias = currentNext.managedAlias;
+
+          if (currentNext.aliases.length === 0) {
+            delete frontmatter.aliases;
+          } else {
+            frontmatter.aliases = currentNext.aliases;
+          }
+        },
+      );
+    }
+
+    this.setManagedHeadingAlias(file.path, nextManagedAlias);
+  }
+
+  queueHeadingAliasSync(file: TFile, delay = 300): void {
+    const path = file.path;
+    const existingTimer = this.headingAliasTimers.get(path);
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      this.headingAliasTimers.delete(path);
+      const previousSync =
+        this.headingAliasSyncs.get(path) ?? Promise.resolve();
+      const currentSync = previousSync
+        .catch(() => undefined)
+        .then(() => this.reconcileHeadingAlias(file));
+      this.headingAliasSyncs.set(path, currentSync);
+      currentSync
+        .catch((error) => {
+          console.error(
+            `Unable to synchronize heading alias for: ${file.path}`,
+            error,
+          );
+        })
+        .finally(() => {
+          if (this.headingAliasSyncs.get(path) === currentSync) {
+            this.headingAliasSyncs.delete(path);
+          }
+        });
+    }, delay);
+    this.headingAliasTimers.set(path, timer);
+  }
+
+  async reconcileAllHeadingAliases(): Promise<void> {
+    const files = this.app.vault.getMarkdownFiles();
+    const filesByPath = new Map(files.map((file) => [file.path, file]));
+    const filesByName = new Map<string, TFile[]>();
+    for (const file of files) {
+      const matches = filesByName.get(file.name) ?? [];
+      matches.push(file);
+      filesByName.set(file.name, matches);
+    }
+
+    for (const path of Object.keys(
+      this.settings.managedHeadingAliases,
+    )) {
+      if (filesByPath.has(path)) {
+        continue;
+      }
+
+      const name = path.split("/").last();
+      const matches = name === undefined ? [] : filesByName.get(name) ?? [];
+      if (
+        matches.length === 1 &&
+        this.settings.managedHeadingAliases[matches[0].path] === undefined
+      ) {
+        this.settings.managedHeadingAliases[matches[0].path] =
+          this.settings.managedHeadingAliases[path];
+      }
+      this.setManagedHeadingAlias(path, undefined);
+    }
+
+    for (const file of files) {
+      if (
+        this.isHeadingAliasFile(file) ||
+        this.settings.managedHeadingAliases[file.path] !== undefined
+      ) {
+        await this.reconcileHeadingAlias(file);
+      }
+    }
   }
 
   openPdfExternally(file: TFile, subpath: string): void {
@@ -1217,6 +1416,10 @@ export default class MyPlugin extends Plugin {
 
         this.vaultContentDict[uuid] = f;
       }
+
+      this.reconcileAllHeadingAliases().catch((error) => {
+        console.error("Unable to reconcile heading aliases", error);
+      });
     });
 
     this.app.metadataCache.on(
@@ -1227,6 +1430,103 @@ export default class MyPlugin extends Plugin {
           this.vaultContentDict[uuid] = file;
         }
       },
+    );
+
+    this.registerEvent(
+      this.app.metadataCache.on("changed", (file: TFile) => {
+        if (
+          this.isHeadingAliasFile(file) ||
+          this.settings.managedHeadingAliases[file.path] !== undefined
+        ) {
+          this.queueHeadingAliasSync(file);
+        }
+      }),
+    );
+
+    this.registerEvent(
+      this.app.vault.on("rename", (abstractFile, oldPath) => {
+        if (!(abstractFile instanceof TFile)) {
+          const oldPrefix = `${oldPath}/`;
+          const newPrefix = `${abstractFile.path}/`;
+          for (const path of Object.keys(
+            this.settings.managedHeadingAliases,
+          )) {
+            if (!path.startsWith(oldPrefix)) {
+              continue;
+            }
+
+            const nextPath = `${newPrefix}${path.slice(oldPrefix.length)}`;
+            this.settings.managedHeadingAliases[nextPath] =
+              this.settings.managedHeadingAliases[path];
+            delete this.settings.managedHeadingAliases[path];
+          }
+          for (const [path, timer] of this.headingAliasTimers) {
+            if (path.startsWith(oldPrefix)) {
+              window.clearTimeout(timer);
+              this.headingAliasTimers.delete(path);
+            }
+          }
+          this.scheduleAliasSettingsSave();
+          window.setTimeout(() => {
+            this.reconcileAllHeadingAliases().catch((error) => {
+              console.error("Unable to reconcile heading aliases", error);
+            });
+          }, 0);
+          return;
+        }
+
+        const timer = this.headingAliasTimers.get(oldPath);
+        if (timer !== undefined) {
+          window.clearTimeout(timer);
+          this.headingAliasTimers.delete(oldPath);
+        }
+
+        const previousManagedAlias =
+          this.settings.managedHeadingAliases[oldPath];
+        if (previousManagedAlias !== undefined) {
+          delete this.settings.managedHeadingAliases[oldPath];
+          this.settings.managedHeadingAliases[abstractFile.path] =
+            previousManagedAlias;
+          this.scheduleAliasSettingsSave();
+        }
+
+        if (
+          this.isHeadingAliasFile(abstractFile) ||
+          previousManagedAlias !== undefined
+        ) {
+          this.queueHeadingAliasSync(abstractFile, 0);
+        }
+      }),
+    );
+
+    this.registerEvent(
+      this.app.vault.on("delete", (abstractFile) => {
+        if (!(abstractFile instanceof TFile)) {
+          const prefix = `${abstractFile.path}/`;
+          for (const path of Object.keys(
+            this.settings.managedHeadingAliases,
+          )) {
+            if (path.startsWith(prefix)) {
+              delete this.settings.managedHeadingAliases[path];
+            }
+          }
+          for (const [path, timer] of this.headingAliasTimers) {
+            if (path.startsWith(prefix)) {
+              window.clearTimeout(timer);
+              this.headingAliasTimers.delete(path);
+            }
+          }
+          this.scheduleAliasSettingsSave();
+          return;
+        }
+
+        const timer = this.headingAliasTimers.get(abstractFile.path);
+        if (timer !== undefined) {
+          window.clearTimeout(timer);
+          this.headingAliasTimers.delete(abstractFile.path);
+        }
+        this.setManagedHeadingAlias(abstractFile.path, undefined);
+      }),
     );
 
     this.app.workspace.on("active-leaf-change", () => {
@@ -1386,6 +1686,17 @@ export default class MyPlugin extends Plugin {
 
   onunload() {
     console.log("gonext - onunload()");
+    for (const timer of this.headingAliasTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    this.headingAliasTimers.clear();
+    if (this.aliasSettingsSaveTimer !== undefined) {
+      window.clearTimeout(this.aliasSettingsSaveTimer);
+      this.aliasSettingsSaveTimer = undefined;
+      this.saveSettings().catch((error) => {
+        console.error("Unable to save managed heading aliases", error);
+      });
+    }
     // @ts-ignore
     delete window.gonext;
   }
@@ -1396,6 +1707,9 @@ export default class MyPlugin extends Plugin {
       DEFAULT_SETTINGS,
       await this.loadData(),
     );
+    this.settings.managedHeadingAliases = {
+      ...(this.settings.managedHeadingAliases ?? {}),
+    };
   }
 
   async saveSettings() {
