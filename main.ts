@@ -22,6 +22,21 @@ interface IndexLinkEntry {
 	alias: string;
 }
 
+interface NativeLinkSuggestion {
+	type?: string;
+	alias?: string;
+	file?: TFile;
+	downranked?: boolean;
+}
+
+interface NativeLinkSuggest {
+	onTrigger?: (...args: any[]) => unknown;
+	getSuggestions: (...args: any[]) => any;
+	suggestManager?: {
+		getFileSuggestions?: (...args: any[]) => unknown;
+	};
+}
+
 class IndexLinkSuggestModal extends FuzzySuggestModal<IndexLinkEntry> {
 	constructor(
 		app: App,
@@ -144,6 +159,7 @@ export default class MyPlugin extends Plugin {
 	headingAliasTimers: Map<string, number> = new Map();
 	headingAliasSyncs: Map<string, Promise<void>> = new Map();
 	aliasSettingsSaveTimer: number = undefined;
+	restoreNativeLinkSuggestionSort: (() => void) | undefined;
 
 	openViewInNewTabIfNotOpened(name: string) {
 		const f = this.app.vault.getAbstractFileByPath(name);
@@ -271,6 +287,122 @@ export default class MyPlugin extends Plugin {
 		const heading = cache.headings?.find((item) => item.level === 1);
 		const alias = heading?.heading.trim();
 		return alias === "" ? undefined : alias;
+	}
+
+	getCreatedAt(file: TFile): number {
+		const cache = this.app.metadataCache.getFileCache(file);
+		const createdAt = cache?.frontmatter?.created_at;
+		let timestamp = Number.NaN;
+
+		if (createdAt instanceof Date) {
+			timestamp = createdAt.getTime();
+		} else if (typeof createdAt === "number") {
+			timestamp = createdAt;
+		} else if (typeof createdAt === "string") {
+			timestamp = Date.parse(createdAt);
+		}
+
+		return Number.isFinite(timestamp) ? timestamp : file.stat.ctime;
+	}
+
+	sortSameNameAliasesByCreatedAt(
+		suggestions: NativeLinkSuggestion[],
+	): NativeLinkSuggestion[] {
+		const groups = new Map<
+			string,
+			Array<{
+				position: number;
+				suggestion: NativeLinkSuggestion;
+				createdAt: number;
+			}>
+		>();
+
+		suggestions.forEach((suggestion, position) => {
+			const alias = suggestion.alias?.trim();
+			if (
+				suggestion.type !== "alias" ||
+				alias === undefined ||
+				alias === "" ||
+				!(suggestion.file instanceof TFile)
+			) {
+				return;
+			}
+
+			const key = `${alias.toLocaleLowerCase()}\u0000${suggestion.downranked === true}`;
+			const group = groups.get(key) ?? [];
+			group.push({
+				position,
+				suggestion,
+				createdAt: this.getCreatedAt(suggestion.file),
+			});
+			groups.set(key, group);
+		});
+
+		const sortedSuggestions = [...suggestions];
+		for (const group of groups.values()) {
+			if (group.length < 2) {
+				continue;
+			}
+
+			const sortedGroup = [...group].sort(
+				(left, right) => right.createdAt - left.createdAt,
+			);
+			group.forEach((entry, index) => {
+				sortedSuggestions[entry.position] = sortedGroup[index].suggestion;
+			});
+		}
+
+		return sortedSuggestions;
+	}
+
+	patchNativeLinkSuggestionSort(): void {
+		if (this.restoreNativeLinkSuggestionSort !== undefined) {
+			return;
+		}
+
+		const editorSuggest = (this.app.workspace as any).editorSuggest;
+		const suggests = editorSuggest?.suggests as
+			| NativeLinkSuggest[]
+			| undefined;
+		const nativeLinkSuggest = suggests?.find((suggest) => {
+			if (
+				typeof suggest?.suggestManager?.getFileSuggestions === "function"
+			) {
+				return true;
+			}
+
+			const onTrigger = suggest?.onTrigger;
+			return (
+				typeof onTrigger === "function" &&
+				Function.prototype.toString.call(onTrigger).includes('lastIndexOf("[[")')
+			);
+		});
+		if (nativeLinkSuggest === undefined) {
+			console.warn("Unable to find the native link suggestion provider");
+			return;
+		}
+
+		const originalGetSuggestions = nativeLinkSuggest.getSuggestions;
+		const plugin = this;
+		const patchedGetSuggestions = function (...args: any[]) {
+			const result = originalGetSuggestions.apply(this, args);
+			const sort = (suggestions: NativeLinkSuggestion[] | null) =>
+				Array.isArray(suggestions)
+					? plugin.sortSameNameAliasesByCreatedAt(suggestions)
+					: suggestions;
+
+			return result !== null && typeof result?.then === "function"
+				? result.then(sort)
+				: sort(result);
+		};
+
+		nativeLinkSuggest.getSuggestions = patchedGetSuggestions;
+		this.restoreNativeLinkSuggestionSort = () => {
+			if (nativeLinkSuggest.getSuggestions === patchedGetSuggestions) {
+				nativeLinkSuggest.getSuggestions = originalGetSuggestions;
+			}
+			this.restoreNativeLinkSuggestionSort = undefined;
+		};
 	}
 
 	getNextHeadingAliases(
@@ -1415,6 +1547,7 @@ export default class MyPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => {
 			console.log("workspace - layout-ready");
+			this.patchNativeLinkSuggestionSort();
 			for (const f of this.app.vault.getFiles()) {
 				const uuid = f.basename;
 				if (!Helper.isUUID(uuid)) {
@@ -1700,6 +1833,7 @@ export default class MyPlugin extends Plugin {
 
 	onunload() {
 		console.log("gonext - onunload()");
+		this.restoreNativeLinkSuggestionSort?.();
 		for (const timer of this.headingAliasTimers.values()) {
 			window.clearTimeout(timer);
 		}
