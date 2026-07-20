@@ -348,7 +348,8 @@ export default class MyPlugin extends Plugin {
 				(left, right) => right.createdAt - left.createdAt,
 			);
 			group.forEach((entry, index) => {
-				sortedSuggestions[entry.position] = sortedGroup[index].suggestion;
+				sortedSuggestions[entry.position] =
+					sortedGroup[index].suggestion;
 			});
 		}
 
@@ -366,7 +367,8 @@ export default class MyPlugin extends Plugin {
 			| undefined;
 		const nativeLinkSuggest = suggests?.find((suggest) => {
 			if (
-				typeof suggest?.suggestManager?.getFileSuggestions === "function"
+				typeof suggest?.suggestManager?.getFileSuggestions ===
+				"function"
 			) {
 				return true;
 			}
@@ -374,7 +376,9 @@ export default class MyPlugin extends Plugin {
 			const onTrigger = suggest?.onTrigger;
 			return (
 				typeof onTrigger === "function" &&
-				Function.prototype.toString.call(onTrigger).includes('lastIndexOf("[[")')
+				Function.prototype.toString
+					.call(onTrigger)
+					.includes('lastIndexOf("[[")')
 			);
 		});
 		if (nativeLinkSuggest === undefined) {
@@ -384,7 +388,7 @@ export default class MyPlugin extends Plugin {
 
 		const originalGetSuggestions = nativeLinkSuggest.getSuggestions;
 		const plugin = this;
-		const patchedGetSuggestions = function (...args: any[]) {
+		const patchedGetSuggestions = function(...args: any[]) {
 			const result = originalGetSuggestions.apply(this, args);
 			const sort = (suggestions: NativeLinkSuggestion[] | null) =>
 				Array.isArray(suggestions)
